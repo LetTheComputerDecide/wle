@@ -1,0 +1,54 @@
+import type { ErrorKind } from "./errors.ts";
+import type { PageRecord } from "./records.ts";
+
+export interface Summary {
+	total: number;
+	ok: number;
+	failed: number;
+	/** Failures by kind, including `dropped`. */
+	errors: Partial<Record<ErrorKind, number>>;
+	peakQueueSize: number;
+	/** Fetch duration percentiles over URLs that were actually fetched. */
+	fetchMs: { p50: number; p95: number } | undefined;
+}
+
+export class SummaryCollector {
+	#ok = 0;
+	#failed = 0;
+	readonly #errors: Partial<Record<ErrorKind, number>> = {};
+	readonly #durations: number[] = [];
+
+	add(record: PageRecord): void {
+		if (record.status === "ok") {
+			this.#ok++;
+		} else {
+			this.#failed++;
+			const { kind } = record.error;
+			this.#errors[kind] = (this.#errors[kind] ?? 0) + 1;
+		}
+		if (record.attempts > 0) {
+			this.#durations.push(record.durationMs);
+		}
+	}
+
+	finish(peakQueueSize: number): Summary {
+		const sorted = this.#durations.toSorted((a, b) => a - b);
+		return {
+			total: this.#ok + this.#failed,
+			ok: this.#ok,
+			failed: this.#failed,
+			errors: { ...this.#errors },
+			peakQueueSize,
+			fetchMs:
+				sorted.length === 0
+					? undefined
+					: { p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95) },
+		};
+	}
+}
+
+/** Nearest-rank percentile of an ascending, non-empty array. */
+export function percentile(sorted: readonly number[], p: number): number {
+	const rank = Math.max(1, Math.ceil(p * sorted.length));
+	return sorted[rank - 1] as number;
+}
