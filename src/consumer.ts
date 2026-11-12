@@ -16,7 +16,9 @@ export async function consume(
 	for await (const { html, ...item } of queue) {
 		let record: PageRecord;
 		try {
-			record = { ...item, status: "ok", links: extract(html, item.finalUrl) };
+			const links = extract(html, item.finalUrl);
+			const { index, url, ...rest } = item;
+			record = { index, url, status: "ok", ...rest, links };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			record = errorRecord(item, "parse", message);

@@ -1,0 +1,99 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"concurrency": {
+			"default": 16,
+			"description": "Maximum fetches in flight across all hosts",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"perHostConcurrency": {
+			"default": 4,
+			"description": "Maximum fetches in flight to one host",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"consumers": {
+			"default": 2,
+			"description": "Number of concurrent consumers parsing pages",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 64
+		},
+		"queueCapacity": {
+			"default": 100,
+			"description": "Pages buffered between producer and consumers",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 100000
+		},
+		"overflow": {
+			"default": "block",
+			"description": "What happens when the queue is full",
+			"type": "string",
+			"enum": ["block", "drop-oldest"]
+		},
+		"timeoutMs": {
+			"default": 10000,
+			"description": "Per-attempt timeout, including reading the body",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 9007199254740991
+		},
+		"maxBodyBytes": {
+			"default": 5242880,
+			"description": "Largest response body accepted",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 9007199254740991
+		},
+		"retries": {
+			"default": 2,
+			"description": "Retries after the first attempt, for transient failures",
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 10
+		},
+		"retryBaseDelayMs": {
+			"default": 250,
+			"description": "Backoff ceiling for the first retry",
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 9007199254740991
+		},
+		"retryMaxDelayMs": {
+			"default": 5000,
+			"description": "Largest backoff, and the longest Retry-After honoured",
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 9007199254740991
+		},
+		"userAgent": {
+			"default": "wle/0.1.0",
+			"description": "User-Agent header sent with every request",
+			"type": "string",
+			"minLength": 1
+		},
+		"format": {
+			"default": "jsonl",
+			"description": "Output format",
+			"type": "string",
+			"enum": ["jsonl", "text"]
+		},
+		"out": {
+			"description": "Output file; stdout when omitted",
+			"type": "string",
+			"minLength": 1
+		},
+		"logLevel": {
+			"default": "info",
+			"description": "Minimum level logged to stderr",
+			"type": "string",
+			"enum": ["debug", "info", "warn", "error"]
+		}
+	},
+	"additionalProperties": false
+}

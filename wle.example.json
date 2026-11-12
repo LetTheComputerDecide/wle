@@ -1,0 +1,11 @@
+{
+	"$schema": "./config.schema.json",
+	"concurrency": 32,
+	"perHostConcurrency": 2,
+	"consumers": 4,
+	"queueCapacity": 500,
+	"overflow": "drop-oldest",
+	"timeoutMs": 5000,
+	"retries": 1,
+	"format": "text"
+}

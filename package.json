@@ -19,7 +19,8 @@
 		"format": "biome check --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"coverage": "vitest run --coverage"
+		"coverage": "vitest run --coverage",
+		"schema": "node src/cli.ts --print-config-schema > config.schema.json"
 	},
 	"dependencies": {
 		"htmlparser2": "^12.0.0",

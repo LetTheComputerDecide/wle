@@ -38,9 +38,14 @@ export interface FetchedItem {
 }
 
 export function errorRecord(
-	base: RecordBase & { finalUrl?: string; httpStatus?: number },
+	{
+		index,
+		url,
+		...rest
+	}: RecordBase & { finalUrl?: string; httpStatus?: number },
 	kind: ErrorKind,
 	message: string,
 ): ErrorRecord {
-	return { ...base, status: "error", error: { kind, message } };
+	// Key order is cosmetic but makes JSONL output easier to scan.
+	return { index, url, status: "error", ...rest, error: { kind, message } };
 }
