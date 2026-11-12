@@ -29,7 +29,7 @@ The core is a library; the CLI is a thin wrapper around it.
 - Only `<a href>` counts as a hyperlink.
 - Resolve against `<base href>` (itself resolved against the page URL), then against the final page URL.
 - Strip fragments; de-duplicate preserving first-seen order.
-- Keep `mailto:` and `tel:`; drop `javascript:` and fragment-only links.
+- Keep `mailto:` and `tel:`; drop script-like links (`javascript:`, `data:`, `vbscript:`) and empty, fragment-only or unparseable hrefs.
 
 ### Queue
 
