@@ -116,5 +116,3 @@ No coverage gate; the coverage figure is quoted in the README.
 6. Config, CLI, output, shutdown
 7. Docker
 8. README, diagram, `AI_NOTES.md`
-
-First to cut if behind: per-host limiting, p50/p95 stats.
