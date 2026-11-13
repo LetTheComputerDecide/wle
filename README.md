@@ -52,7 +52,7 @@ docker run --rm -v "$PWD:/data:ro" wle --file /data/urls.txt
 Development:
 
 ```sh
-pnpm test        # 205 tests, about 1 s, no network access
+pnpm test        # 206 tests, about 1 s, no network access
 pnpm coverage    # with a coverage report
 pnpm lint        # Biome
 pnpm typecheck   # tsc --strict
@@ -161,7 +161,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 | Parses HTML and outputs the hyperlinks for each URL | `extractLinks`; one record per URL, to stdout or a file |
 | Producer and consumer run concurrently | Both run as concurrent async tasks over the shared queue. A test makes page 2's fetch wait until page 1 has been *parsed and emitted*, which can only finish if they truly overlap |
 | Error isolation | Every failure (invalid URL, fetch, HTTP status, parse) becomes a record for that URL only. Tests inject each kind of failure and check the other URLs are unaffected |
-| Unit tests | 205 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
+| Unit tests | 206 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
 | **Bonus:** URLs fetched concurrently | Global limit (`--concurrency`) plus a per-host limit to be polite to any one server |
 | **Bonus:** trim oldest entries when the queue balloons | `--overflow drop-oldest`: a full queue evicts its oldest page, which is reported as a `dropped` record rather than lost silently. The peak queue depth is in the summary |
 | **Bonus:** comprehensive tests | About 96% statement coverage; see [Testing](#testing) |
@@ -203,7 +203,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 
 ## Testing
 
-`pnpm test` runs 205 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
+`pnpm test` runs 206 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
 
 | Kind | What | Where |
 |---|---|---|

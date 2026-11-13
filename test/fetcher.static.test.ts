@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { FetchError } from "../src/errors.ts";
 import {
 	parseContentType,
@@ -42,6 +42,26 @@ async function failure(
 }
 
 describe("StaticFetcher", () => {
+	// A timer left running would keep each fetch's signals in memory for the full timeout;
+	// at high throughput that grew to hundreds of megabytes. AbortSignal.timeout() has that
+	// problem but its timer is internal and not listed as an active resource, so it is
+	// checked for separately.
+	test("cancels its timeout timer once the fetch is done", async () => {
+		const timers = () =>
+			process.getActiveResourcesInfo().filter((type) => type === "Timeout")
+				.length;
+		const signalTimeout = vi.spyOn(AbortSignal, "timeout");
+		try {
+			const before = timers();
+			await get("/html");
+			await failure("/status?code=404");
+			expect(timers()).toBe(before);
+			expect(signalTimeout).not.toHaveBeenCalled();
+		} finally {
+			signalTimeout.mockRestore();
+		}
+	});
+
 	test("returns the markup, status and final URL", async () => {
 		const page = await get("/html");
 		expect(page.httpStatus).toBe(200);

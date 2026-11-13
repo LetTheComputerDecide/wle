@@ -29,8 +29,15 @@ export class StaticFetcher implements Fetcher {
 	}
 
 	async fetch(url: URL, signal: AbortSignal): Promise<FetchedPage> {
-		const timeout = AbortSignal.timeout(this.#options.timeoutMs);
-		const combined = AbortSignal.any([signal, timeout]);
+		// Not AbortSignal.timeout(): its timer cannot be cancelled, so every fetch would keep
+		// its signals in memory for the full timeout even after finishing. At high throughput
+		// that adds up to hundreds of megabytes.
+		const timeout = new AbortController();
+		const timer = setTimeout(
+			() => timeout.abort(new DOMException("Timed out", "TimeoutError")),
+			this.#options.timeoutMs,
+		);
+		const combined = AbortSignal.any([signal, timeout.signal]);
 		try {
 			const response = await fetch(url, {
 				signal: combined,
@@ -44,7 +51,7 @@ export class StaticFetcher implements Fetcher {
 		} catch (error) {
 			// `combined` does not say which signal fired, so check each. Timeout first, so a
 			// timeout is reported as one even if the run was also interrupted.
-			if (timeout.aborted) {
+			if (timeout.signal.aborted) {
 				throw new FetchError(
 					"timeout",
 					`Timed out after ${this.#options.timeoutMs} ms`,
@@ -60,6 +67,8 @@ export class StaticFetcher implements Fetcher {
 			throw new FetchError("network", describeNetworkError(error), {
 				cause: error,
 			});
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 
