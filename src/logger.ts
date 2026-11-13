@@ -11,17 +11,22 @@ export interface Logger {
 	error(message: string, fields?: LogFields): void;
 }
 
-const RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+const LEVEL_RANK: Record<LogLevel, number> = {
+	debug: 0,
+	info: 1,
+	warn: 2,
+	error: 3,
+};
 
 /**
  * Writes logfmt lines (`level=warn msg="..." url=...`): structured enough to grep and
  * parse, readable enough for a terminal.
  */
 export function createLogger(stream: Writable, minLevel: LogLevel): Logger {
-	const log =
+	const logAt =
 		(level: LogLevel) =>
 		(message: string, fields: LogFields = {}) => {
-			if (RANK[level] < RANK[minLevel]) {
+			if (LEVEL_RANK[level] < LEVEL_RANK[minLevel]) {
 				return;
 			}
 			const pairs = [`level=${level}`, `msg=${quote(message)}`];
@@ -33,10 +38,10 @@ export function createLogger(stream: Writable, minLevel: LogLevel): Logger {
 			stream.write(`${pairs.join(" ")}\n`);
 		};
 	return {
-		debug: log("debug"),
-		info: log("info"),
-		warn: log("warn"),
-		error: log("error"),
+		debug: logAt("debug"),
+		info: logAt("info"),
+		warn: logAt("warn"),
+		error: logAt("error"),
 	};
 }
 

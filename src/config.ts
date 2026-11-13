@@ -82,7 +82,7 @@ export const configSchema = z
 			.default("info")
 			.describe("Minimum level logged to stderr"),
 	})
-	.refine((c) => c.retryBaseDelayMs <= c.retryMaxDelayMs, {
+	.refine((config) => config.retryBaseDelayMs <= config.retryMaxDelayMs, {
 		message: "retryBaseDelayMs must not exceed retryMaxDelayMs",
 		path: ["retryBaseDelayMs"],
 	});

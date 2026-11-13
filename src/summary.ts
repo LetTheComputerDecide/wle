@@ -51,8 +51,11 @@ export class SummaryCollector {
 	}
 }
 
-/** Nearest-rank percentile of an ascending, non-empty array. */
-export function percentile(sorted: readonly number[], p: number): number {
-	const rank = Math.max(1, Math.ceil(p * sorted.length));
+/** Nearest-rank percentile of an ascending, non-empty array; `fraction` is e.g. 0.95 for p95. */
+export function percentile(
+	sorted: readonly number[],
+	fraction: number,
+): number {
+	const rank = Math.max(1, Math.ceil(fraction * sorted.length));
 	return sorted[rank - 1] as number;
 }

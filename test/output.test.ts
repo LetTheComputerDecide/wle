@@ -5,7 +5,7 @@ import { formatRecord } from "../src/output.ts";
 import type { ErrorRecord, OkRecord } from "../src/records.ts";
 
 const ok: OkRecord = {
-	index: 0,
+	inputIndex: 0,
 	url: "https://example.com/",
 	status: "ok",
 	finalUrl: "https://example.com/",
@@ -16,7 +16,7 @@ const ok: OkRecord = {
 };
 
 const failed: ErrorRecord = {
-	index: 1,
+	inputIndex: 1,
 	url: "https://example.com/missing",
 	status: "error",
 	httpStatus: 404,

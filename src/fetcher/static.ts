@@ -183,8 +183,8 @@ export function parseRetryAfter(
 		return Number(value) * 1000;
 	}
 	// HTTP dates always end in "GMT"; this keeps Date.parse from accepting things like "-5".
-	const date = value.endsWith("GMT") ? Date.parse(value) : Number.NaN;
-	return Number.isNaN(date) ? undefined : Math.max(0, date - now);
+	const retryAt = value.endsWith("GMT") ? Date.parse(value) : Number.NaN;
+	return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - now);
 }
 
 function describeNetworkError(error: unknown): string {

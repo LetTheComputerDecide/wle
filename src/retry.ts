@@ -13,8 +13,8 @@ export interface RetryPolicy {
 
 /** Replaceable timing primitives, so tests can run retries without real waits. */
 export interface RetryDeps {
-	/** Resolves after `ms`, or rejects once `signal` aborts. */
-	sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+	/** Resolves after `delayMs`, or rejects once `signal` aborts. */
+	sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
 	/** Returns a number in [0, 1), for jitter. */
 	random?: () => number;
 }
@@ -24,8 +24,8 @@ export type RetryResult<T> =
 	| { ok: true; value: T; attempts: number }
 	| { ok: false; error: FetchError; attempts: number };
 
-const defaultSleep = (ms: number, signal: AbortSignal) =>
-	delay(ms, undefined, { signal });
+const defaultSleep = (delayMs: number, signal: AbortSignal) =>
+	delay(delayMs, undefined, { signal });
 
 /**
  * Runs `attempt` until it succeeds, fails with a non-retryable error, or runs out of

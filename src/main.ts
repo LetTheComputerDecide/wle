@@ -309,6 +309,8 @@ function logSummary(logger: Logger, summary: Summary): void {
 
 /** `util.parseArgs` signals usage errors only through `code`; it has no error class. */
 function isParseArgsError(error: unknown): error is Error {
-	const code = (error as { code?: unknown } | null)?.code;
-	return typeof code === "string" && code.startsWith("ERR_PARSE_ARGS_");
+	const errorCode = (error as { code?: unknown } | null)?.code;
+	return (
+		typeof errorCode === "string" && errorCode.startsWith("ERR_PARSE_ARGS_")
+	);
 }

@@ -35,9 +35,9 @@ export async function produce(
 	deps: ProducerDeps,
 ): Promise<void> {
 	const inFlight = new Set<Promise<void>>();
-	const hosts = new HostLimiters(options.perHostConcurrency);
+	const hostLimiters = new HostLimiters(options.perHostConcurrency);
 	let failure: { error: unknown } | undefined;
-	let index = 0;
+	let nextInputIndex = 0;
 
 	for await (const input of inputs) {
 		// A fatal error elsewhere: stop reading. Breaking also closes the input iterator.
@@ -48,7 +48,12 @@ export async function produce(
 			// Already read from the input, so it still gets a record.
 			deps.emit(
 				errorRecord(
-					{ index, url: input, attempts: 0, durationMs: 0 },
+					{
+						inputIndex: nextInputIndex,
+						url: input,
+						attempts: 0,
+						durationMs: 0,
+					},
 					"aborted",
 					"Aborted before fetching",
 				),
@@ -58,7 +63,13 @@ export async function produce(
 		// Tasks never reject: the first error is kept and rethrown once all have settled.
 		// Otherwise a rejection would end the race below while siblings were still running,
 		// and their later rejections would go unhandled.
-		const task = produceOne(index++, input, options, deps, hosts)
+		const task = produceOne(
+			nextInputIndex++,
+			input,
+			options,
+			deps,
+			hostLimiters,
+		)
 			.catch((error: unknown) => {
 				failure ??= { error };
 			})
@@ -80,17 +91,17 @@ export async function produce(
 }
 
 async function produceOne(
-	index: number,
+	inputIndex: number,
 	input: string,
 	options: ProducerOptions,
 	deps: ProducerDeps,
-	hosts: HostLimiters,
+	hostLimiters: HostLimiters,
 ): Promise<void> {
 	const url = parseHttpUrl(input);
 	if (typeof url === "string") {
 		deps.emit(
 			errorRecord(
-				{ index, url: input, attempts: 0, durationMs: 0 },
+				{ inputIndex, url: input, attempts: 0, durationMs: 0 },
 				"invalid_url",
 				url,
 			),
@@ -101,13 +112,14 @@ async function produceOne(
 	const started = deps.now();
 	// The host slot is taken per attempt, so it is free while a retry backs off.
 	const result = await withRetry(
-		() => hosts.run(url.host, () => deps.fetcher.fetch(url, deps.signal)),
+		() =>
+			hostLimiters.run(url.host, () => deps.fetcher.fetch(url, deps.signal)),
 		options.retry,
 		deps.signal,
 		deps.retryDeps,
 	);
-	const base = {
-		index,
+	const recordFields = {
+		inputIndex,
 		url: input,
 		attempts: result.attempts,
 		durationMs: Math.round(deps.now() - started),
@@ -118,8 +130,8 @@ async function produceOne(
 		deps.emit(
 			errorRecord(
 				error.httpStatus === undefined
-					? base
-					: { ...base, httpStatus: error.httpStatus },
+					? recordFields
+					: { ...recordFields, httpStatus: error.httpStatus },
 				error.kind,
 				error.message,
 			),
@@ -128,7 +140,7 @@ async function produceOne(
 	}
 	// Under the `block` policy this waits while the queue is full. The task keeps its slot
 	// in the window meanwhile, so slow consumers throttle fetching (backpressure).
-	await deps.queue.put({ ...base, ...result.value });
+	await deps.queue.put({ ...recordFields, ...result.value });
 }
 
 /** Returns the parsed URL, or a message explaining why the input was rejected. */
@@ -152,14 +164,14 @@ class HostLimiters {
 		this.#concurrency = concurrency;
 	}
 
-	async run<T>(host: string, fn: () => Promise<T>): Promise<T> {
+	async run<T>(host: string, operation: () => Promise<T>): Promise<T> {
 		let limiter = this.#limiters.get(host);
 		if (!limiter) {
 			limiter = pLimit(this.#concurrency);
 			this.#limiters.set(host, limiter);
 		}
 		try {
-			return await limiter(fn);
+			return await limiter(operation);
 		} finally {
 			// p-limit lowers `activeCount` before the caller resumes, so this sees the call
 			// above as finished. Calls still queued for the host keep the limiter alive.

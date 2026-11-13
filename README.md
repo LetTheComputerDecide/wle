@@ -61,13 +61,13 @@ pnpm build       # compile to dist/ (used by the Docker image)
 
 Every input URL produces exactly one record, whatever happens to it. Records go to stdout (or `--out <file>`); logs and the end-of-run summary go to stderr, so piping the output never mixes the two.
 
-Records are written as each URL completes, not in input order, so one slow URL never holds back the others. Each record carries the `index` of its URL in the input; `jq -s 'sort_by(.index)'` restores input order.
+Records are written as each URL completes, not in input order, so one slow URL never holds back the others. Each record carries an `inputIndex`, the position of its URL in the input, which identifies the input even when a URL is listed twice; `jq -s 'sort_by(.inputIndex)'` restores input order.
 
 The default format is JSON Lines:
 
 ```json
-{"index":0,"url":"https://a.example/","status":"ok","attempts":1,"durationMs":212,"finalUrl":"https://a.example/home","httpStatus":200,"links":["https://a.example/about","mailto:hi@a.example"]}
-{"index":1,"url":"https://b.example/","status":"error","attempts":3,"durationMs":10457,"error":{"kind":"timeout","message":"Timed out after 10000 ms"}}
+{"inputIndex":0,"url":"https://a.example/","status":"ok","attempts":1,"durationMs":212,"finalUrl":"https://a.example/home","httpStatus":200,"links":["https://a.example/about","mailto:hi@a.example"]}
+{"inputIndex":1,"url":"https://b.example/","status":"error","attempts":3,"durationMs":10457,"error":{"kind":"timeout","message":"Timed out after 10000 ms"}}
 ```
 
 `--format text` gives the human-readable form shown at the top.

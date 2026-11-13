@@ -17,15 +17,15 @@ export async function consume(
 	extract: LinkExtractor,
 	emit: (record: PageRecord) => void,
 ): Promise<void> {
-	for await (const { html, ...item } of queue) {
+	for await (const { html, ...pageMetadata } of queue) {
 		let record: PageRecord;
 		try {
-			const links = extract(html, item.finalUrl);
-			const { index, url, ...rest } = item;
-			record = { index, url, status: "ok", ...rest, links };
+			const links = extract(html, pageMetadata.finalUrl);
+			const { inputIndex, url, ...fetchDetails } = pageMetadata;
+			record = { inputIndex, url, status: "ok", ...fetchDetails, links };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			record = errorRecord(item, "parse", message);
+			record = errorRecord(pageMetadata, "parse", message);
 		}
 		emit(record);
 		// Parsing is synchronous; yielding lets fetches progress while a backlog drains.

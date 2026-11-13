@@ -75,17 +75,17 @@ export async function runPipeline(
 		: controller.signal;
 
 	// Wrapped so that even a thrown `undefined` counts as a failure.
-	let fatal: { error: unknown } | undefined;
+	let fatalFailure: { error: unknown } | undefined;
 	// `queue` is declared below; this only runs after it is initialised.
 	const fail = (error: unknown) => {
-		if (fatal) {
+		if (fatalFailure) {
 			return;
 		}
-		fatal = { error };
+		fatalFailure = { error };
 		controller.abort(error);
 		// Keep the queue moving so a producer blocked on a full queue can finish.
 		void (async () => {
-			for await (const _ of queue) {
+			for await (const _discardedPage of queue) {
 				// Discard.
 			}
 		})();
@@ -93,7 +93,7 @@ export async function runPipeline(
 
 	const emit = (record: PageRecord) => {
 		// After a fatal error the sink may be broken, and the run is failing anyway.
-		if (fatal) {
+		if (fatalFailure) {
 			return;
 		}
 		summary.add(record);
@@ -110,10 +110,10 @@ export async function runPipeline(
 		capacity: options.queueCapacity,
 		overflow: options.overflow,
 		// The evicted page's HTML is discarded; its record carries only the metadata.
-		onDrop: ({ html: _, ...item }) =>
+		onDrop: ({ html: _, ...evictedPage }) =>
 			emit(
 				errorRecord(
-					item,
+					evictedPage,
 					"dropped",
 					"Evicted from the full queue (drop-oldest)",
 				),
@@ -138,8 +138,8 @@ export async function runPipeline(
 	);
 
 	await Promise.all([producer, ...consumers]);
-	if (fatal) {
-		throw fatal.error;
+	if (fatalFailure) {
+		throw fatalFailure.error;
 	}
 	return summary.finish(queue.peakSize);
 }

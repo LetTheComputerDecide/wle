@@ -38,10 +38,10 @@ export function extractLinks(html: string, pageUrl: string | URL): string[] {
 	});
 	parser.end(html);
 
-	const base = resolveBase(baseHref, pageUrl);
+	const baseUrl = resolveBase(baseHref, pageUrl);
 	const links = new Set<string>();
 	for (const href of hrefs) {
-		const link = normalise(href, base);
+		const link = normalise(href, baseUrl);
 		if (link !== undefined) {
 			links.add(link);
 		}
@@ -50,21 +50,21 @@ export function extractLinks(html: string, pageUrl: string | URL): string[] {
 }
 
 function resolveBase(baseHref: string | undefined, pageUrl: string | URL): URL {
-	const page = new URL(pageUrl);
+	const parsedPageUrl = new URL(pageUrl);
 	if (baseHref === undefined) {
-		return page;
+		return parsedPageUrl;
 	}
 	// An unparseable <base> is ignored, as a browser would, rather than dropping every link.
-	return URL.parse(baseHref, page) ?? page;
+	return URL.parse(baseHref, parsedPageUrl) ?? parsedPageUrl;
 }
 
-function normalise(href: string, base: URL): string | undefined {
+function normalise(href: string, baseUrl: URL): string | undefined {
 	const trimmed = href.trim();
 	// Browsers trim whitespace from href. Fragment-only links point back at this page.
 	if (trimmed === "" || trimmed.startsWith("#")) {
 		return undefined;
 	}
-	const url = URL.parse(trimmed, base);
+	const url = URL.parse(trimmed, baseUrl);
 	if (url === null || IGNORED_PROTOCOLS.has(url.protocol)) {
 		return undefined;
 	}

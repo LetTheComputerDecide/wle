@@ -79,8 +79,8 @@ async function run(
 		{ ...options, ...overrides },
 		{ fetcher, sink: (record) => records.push(record), ...extra },
 	);
-	const byIndex = records.toSorted((a, b) => a.index - b.index);
-	return { records, byIndex, summary };
+	const byInputIndex = records.toSorted((a, b) => a.inputIndex - b.inputIndex);
+	return { records, byInputIndex, summary };
 }
 
 const urls = (n: number, host = "example.com") =>
@@ -88,10 +88,10 @@ const urls = (n: number, host = "example.com") =>
 
 describe("runPipeline", () => {
 	test("emits one ok record per URL with its links", async () => {
-		const { byIndex, summary } = await run(urls(3), new FakeFetcher());
-		expect(byIndex).toEqual(
+		const { byInputIndex, summary } = await run(urls(3), new FakeFetcher());
+		expect(byInputIndex).toEqual(
 			[0, 1, 2].map((i) => ({
-				index: i,
+				inputIndex: i,
 				url: `https://example.com/${i}`,
 				status: "ok",
 				finalUrl: `https://example.com/${i}`,
@@ -121,18 +121,18 @@ describe("runPipeline", () => {
 				}
 				return page(url);
 			});
-			const { byIndex, summary } = await run(urls(4), fetcher);
-			expect(byIndex.map((r) => r.status)).toEqual([
+			const { byInputIndex, summary } = await run(urls(4), fetcher);
+			expect(byInputIndex.map((r) => r.status)).toEqual([
 				"ok",
 				"error",
 				"error",
 				"ok",
 			]);
-			expect(byIndex[1]).toMatchObject({
+			expect(byInputIndex[1]).toMatchObject({
 				httpStatus: 500,
 				error: { kind: "http_status", message: "HTTP 500" },
 			});
-			expect(byIndex[2]).toMatchObject({ error: { kind: "network" } });
+			expect(byInputIndex[2]).toMatchObject({ error: { kind: "network" } });
 			expect(summary).toMatchObject({
 				ok: 2,
 				failed: 2,
@@ -141,7 +141,7 @@ describe("runPipeline", () => {
 		});
 
 		test("a failed parse does not affect the other pages", async () => {
-			const { byIndex } = await run(
+			const { byInputIndex } = await run(
 				urls(3),
 				new FakeFetcher(),
 				{},
@@ -154,8 +154,8 @@ describe("runPipeline", () => {
 					},
 				},
 			);
-			expect(byIndex.map((r) => r.status)).toEqual(["ok", "error", "ok"]);
-			expect(byIndex[1]).toMatchObject({
+			expect(byInputIndex.map((r) => r.status)).toEqual(["ok", "error", "ok"]);
+			expect(byInputIndex[1]).toMatchObject({
 				finalUrl: "https://example.com/1",
 				error: { kind: "parse", message: "parser exploded" },
 			});
@@ -168,16 +168,19 @@ describe("runPipeline", () => {
 			["javascript:alert(1)", "Unsupported protocol javascript:"],
 		])("rejects the input %j without fetching", async (input, message) => {
 			const fetcher = new FakeFetcher();
-			const { byIndex } = await run([input, "https://example.com/"], fetcher);
-			expect(byIndex[0]).toEqual({
-				index: 0,
+			const { byInputIndex } = await run(
+				[input, "https://example.com/"],
+				fetcher,
+			);
+			expect(byInputIndex[0]).toEqual({
+				inputIndex: 0,
 				url: input,
 				status: "error",
 				attempts: 0,
 				durationMs: 0,
 				error: { kind: "invalid_url", message },
 			});
-			expect(byIndex[1]?.status).toBe("ok");
+			expect(byInputIndex[1]?.status).toBe("ok");
 			expect(fetcher.calls).toEqual(["https://example.com/"]);
 		});
 	});
@@ -201,12 +204,12 @@ describe("runPipeline", () => {
 				fetcher,
 				sink: (record) => {
 					records.push(record);
-					if (record.index === 0) {
+					if (record.inputIndex === 0) {
 						emittedFirst();
 					}
 				},
 			});
-			expect(records.map((r) => r.index)).toEqual([0, 1]);
+			expect(records.map((r) => r.inputIndex)).toEqual([0, 1]);
 		});
 
 		test("fetches URLs concurrently, up to the global limit", async () => {
@@ -270,7 +273,7 @@ describe("runPipeline", () => {
 				queueCapacity: 5,
 			});
 			expect(records).toHaveLength(300);
-			expect(new Set(records.map((r) => r.index)).size).toBe(300);
+			expect(new Set(records.map((r) => r.inputIndex)).size).toBe(300);
 			expect(summary).toMatchObject({
 				total: 300,
 				failed: 43,
@@ -357,13 +360,13 @@ describe("runPipeline", () => {
 			);
 			await tick(20);
 			controller.abort();
-			const { byIndex, summary } = await running;
+			const { byInputIndex, summary } = await running;
 
 			expect(read).toBeLessThan(100);
-			expect(byIndex).toHaveLength(read);
-			expect(byIndex[0]?.status).toBe("ok");
+			expect(byInputIndex).toHaveLength(read);
+			expect(byInputIndex[0]?.status).toBe("ok");
 			expect(
-				byIndex
+				byInputIndex
 					.slice(1)
 					.every((r) => r.status === "error" && r.error.kind === "aborted"),
 			).toBe(true);
@@ -427,18 +430,20 @@ describe("runPipeline over HTTP", () => {
 			},
 		);
 
-		const byIndex = records.toSorted((a, b) => a.index - b.index);
-		expect(byIndex[0]).toMatchObject({
+		const byInputIndex = records.toSorted(
+			(a, b) => a.inputIndex - b.inputIndex,
+		);
+		expect(byInputIndex[0]).toMatchObject({
 			status: "ok",
 			links: [server.url("/a"), server.url("/b")],
 		});
-		expect(byIndex[1]).toMatchObject({
+		expect(byInputIndex[1]).toMatchObject({
 			status: "ok",
 			finalUrl: server.url("/sub/target"),
 			links: [server.url("/sub/sibling")],
 		});
 		expect(
-			byIndex.slice(2).map((r) => r.status === "error" && r.error.kind),
+			byInputIndex.slice(2).map((r) => r.status === "error" && r.error.kind),
 		).toEqual(["not_html", "http_status", "timeout", "too_large"]);
 		expect(summary).toMatchObject({ total: 6, ok: 2, failed: 4 });
 		expect(summary.fetchMs?.p95).toBeGreaterThanOrEqual(300);

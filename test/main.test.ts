@@ -38,7 +38,7 @@ const parseRecords = (jsonl: string): PageRecord[] =>
 		.split("\n")
 		.filter(Boolean)
 		.map((line) => JSON.parse(line))
-		.sort((a, b) => a.index - b.index);
+		.sort((a, b) => a.inputIndex - b.inputIndex);
 
 const fast = ["--retries", "0", "--timeout-ms", "300"];
 

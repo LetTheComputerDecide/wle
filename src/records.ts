@@ -1,8 +1,11 @@
 import type { ErrorKind } from "./errors.ts";
 
 interface RecordBase {
-	/** Position of the URL in the input, from 0. */
-	index: number;
+	/**
+	 * The input's ID within the run: its position in the input, from 0. Unique even when
+	 * the same URL is given twice, so it is the key for matching records to inputs.
+	 */
+	inputIndex: number;
 	/** The URL exactly as given in the input. */
 	url: string;
 	/** Fetch attempts made; 0 when the URL was rejected before fetching. */
@@ -38,13 +41,13 @@ export interface ErrorRecord extends RecordBase {
 /**
  * The outcome for one input URL. Every input produces exactly one record, including
  * duplicates and invalid URLs. Records are emitted in completion order, not input
- * order; sort by `index` to restore it. Narrow on `status`.
+ * order; sort by `inputIndex` to restore it. Narrow on `status`.
  */
 export type PageRecord = OkRecord | ErrorRecord;
 
 /** Markup fetched by the producer, waiting on the queue to be parsed. */
 export interface FetchedItem {
-	index: number;
+	inputIndex: number;
 	url: string;
 	finalUrl: string;
 	httpStatus: number;
@@ -56,13 +59,19 @@ export interface FetchedItem {
 /** Builds an error record, keeping the key order used by the other records. */
 export function errorRecord(
 	{
-		index,
+		inputIndex,
 		url,
-		...rest
+		...otherFields
 	}: RecordBase & { finalUrl?: string; httpStatus?: number },
 	kind: ErrorKind,
 	message: string,
 ): ErrorRecord {
 	// Key order is cosmetic but makes JSONL output easier to scan.
-	return { index, url, status: "error", ...rest, error: { kind, message } };
+	return {
+		inputIndex,
+		url,
+		status: "error",
+		...otherFields,
+		error: { kind, message },
+	};
 }
