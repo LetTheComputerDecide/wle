@@ -1,3 +1,16 @@
+/**
+ * Why a URL has no links. Every error record carries exactly one kind.
+ *
+ * - `invalid_url`: not an absolute `http:` or `https:` URL; never fetched.
+ * - `timeout`: an attempt exceeded the timeout, including reading the body.
+ * - `network`: DNS, connection or TLS failure.
+ * - `http_status`: the final response was not 2xx.
+ * - `not_html`: the `Content-Type` is not HTML.
+ * - `too_large`: the body exceeded the size limit.
+ * - `parse`: link extraction threw.
+ * - `dropped`: evicted from the full queue under the `drop-oldest` policy.
+ * - `aborted`: the run was interrupted before the URL finished.
+ */
 export type ErrorKind =
 	| "invalid_url"
 	| "timeout"
@@ -9,16 +22,25 @@ export type ErrorKind =
 	| "dropped"
 	| "aborted";
 
+/** Optional context for a {@link FetchError}. */
 export interface FetchErrorDetails {
+	/** Status of the response that caused the error, if one was received. */
 	httpStatus?: number;
 	/** Server-requested delay before retrying, from a `Retry-After` header. */
 	retryAfterMs?: number;
+	/** The underlying error, kept as the standard `Error.cause`. */
 	cause?: unknown;
 }
 
+/**
+ * A failure to fetch one page, classified by {@link ErrorKind}. {@link Fetcher}
+ * implementations reject with this so retries and records can act on the kind.
+ */
 export class FetchError extends Error {
 	readonly kind: ErrorKind;
+	/** Status of the response that caused the error, if one was received. */
 	readonly httpStatus: number | undefined;
+	/** Server-requested delay before retrying, from a `Retry-After` header. */
 	readonly retryAfterMs: number | undefined;
 
 	constructor(
@@ -47,7 +69,11 @@ export class FetchError extends Error {
 	}
 }
 
-/** Coerces anything thrown into a `FetchError`, so callers deal with one shape. */
+/**
+ * Coerces anything thrown into a `FetchError`, so callers deal with one shape.
+ *
+ * @param fallback - Kind given to errors that are not already a `FetchError`.
+ */
 export function toFetchError(error: unknown, fallback: ErrorKind): FetchError {
 	if (error instanceof FetchError) {
 		return error;

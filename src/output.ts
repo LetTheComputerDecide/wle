@@ -1,7 +1,9 @@
 import type { PageRecord } from "./records.ts";
 
+/** `jsonl` for machines (one JSON object per line), `text` for people. */
 export type OutputFormat = "jsonl" | "text";
 
+/** Renders one record, ending with a newline. */
 export function formatRecord(record: PageRecord, format: OutputFormat): string {
 	return format === "jsonl"
 		? `${JSON.stringify(record)}\n`

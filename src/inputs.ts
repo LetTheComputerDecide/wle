@@ -15,6 +15,7 @@ export interface InputSources {
 
 /** Fails fast on unreadable input files, before any fetching starts. */
 export async function checkInputFiles(files: readonly string[]): Promise<void> {
+	// Best effort: a file can still disappear before it is read, which is then fatal.
 	for (const file of files) {
 		await access(file);
 	}
@@ -43,11 +44,13 @@ async function* readLines(
 	input: Readable,
 	signal: AbortSignal,
 ): AsyncGenerator<string> {
+	// Needed: readline ignores a signal that has already aborted and reads the whole input.
 	if (signal.aborted) {
 		return;
 	}
 	const lines = createInterface({
 		input,
+		// Treat "\r\n" as one line break even when the two bytes arrive in separate chunks.
 		crlfDelay: Number.POSITIVE_INFINITY,
 		signal,
 	});
@@ -59,10 +62,12 @@ async function* readLines(
 			}
 		}
 	} catch (error) {
+		// On abort, readline rejects with an AbortError; that is a normal end of input.
 		if (!signal.aborted) {
 			throw error;
 		}
 	} finally {
+		// Also runs when the caller stops iterating early.
 		lines.close();
 	}
 }

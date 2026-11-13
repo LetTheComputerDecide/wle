@@ -1,17 +1,21 @@
 import type { ErrorKind } from "./errors.ts";
 import type { PageRecord } from "./records.ts";
 
+/** Totals for one pipeline run. */
 export interface Summary {
+	/** Records emitted; one per input read. */
 	total: number;
 	ok: number;
 	failed: number;
 	/** Failures by kind, including `dropped`. */
 	errors: Partial<Record<ErrorKind, number>>;
+	/** Most pages buffered on the queue at once; near capacity suggests slow consumers. */
 	peakQueueSize: number;
 	/** Fetch duration percentiles over URLs that were actually fetched. */
 	fetchMs: { p50: number; p95: number } | undefined;
 }
 
+/** Accumulates records into a {@link Summary}. */
 export class SummaryCollector {
 	#ok = 0;
 	#failed = 0;

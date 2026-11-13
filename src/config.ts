@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { PipelineOptions } from "./pipeline.ts";
 import { VERSION } from "./version.ts";
 
+/**
+ * Every setting, with its default and limits. The single source of truth for config
+ * files, CLI flags and `config.schema.json`. Unknown keys are rejected.
+ */
 export const configSchema = z
 	.strictObject({
 		concurrency: z
@@ -83,9 +87,12 @@ export const configSchema = z
 		path: ["retryBaseDelayMs"],
 	});
 
+/** A validated configuration, with defaults filled in. */
 export type Config = z.output<typeof configSchema>;
+/** What a config file may contain: any subset of the settings. */
 export type ConfigInput = z.input<typeof configSchema>;
 
+/** Invalid or unreadable configuration; the message is meant for the user. */
 export class ConfigError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -96,6 +103,11 @@ export class ConfigError extends Error {
 /**
  * Merges defaults, then the config file (if any), then CLI flags, and validates the
  * result once. Flags may be strings; numeric settings are converted before validation.
+ *
+ * @param configPath - A JSON file of settings; its `$schema` key is ignored.
+ * @param flags - Settings by config key; `undefined` values are ignored.
+ * @throws {ConfigError} (as a rejection) If the file cannot be read or parsed, or a
+ * setting is invalid. The message lists every problem.
  */
 export async function loadConfig(
 	configPath: string | undefined,
@@ -165,6 +177,7 @@ function coerceFlags(flags: Record<string, unknown>): Record<string, unknown> {
 	return coerced;
 }
 
+/** Picks the settings `runPipeline` uses from a full configuration. */
 export function toPipelineOptions(config: Config): PipelineOptions {
 	return {
 		concurrency: config.concurrency,

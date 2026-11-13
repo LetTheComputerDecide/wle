@@ -25,6 +25,7 @@ export interface MainIO {
 	signal: AbortSignal;
 }
 
+/** Process exit codes. Part of the CLI contract, so scripts can rely on them. */
 export const EXIT = { ok: 0, fatal: 1, failures: 2, interrupted: 130 } as const;
 
 /** CLI flag name to config key, for every setting that can be set from the command line. */
@@ -86,6 +87,11 @@ Other:
 Exit codes: 0 all succeeded, 1 fatal error, 2 some URLs failed, 130 interrupted.
 `;
 
+/**
+ * Runs the CLI with injected streams, so it can be tested without a child process.
+ *
+ * @returns The exit code, one of {@link EXIT}. Never rejects.
+ */
 export async function main(
 	argv: readonly string[],
 	io: MainIO,
@@ -118,13 +124,16 @@ export async function main(
 		} else {
 			writeError = error;
 		}
+		// Results can no longer be delivered, so stop fetching either way.
 		controller.abort(error);
 	});
 
 	const sink = (record: PageRecord) => {
+		// A real write failure is fatal: throwing from the sink fails the pipeline.
 		if (writeError) {
 			throw writeError;
 		}
+		// A closed pipe is not: the remaining records are discarded quietly.
 		if (pipeClosed) {
 			return;
 		}
@@ -152,6 +161,7 @@ export async function main(
 		logger.error("Fatal error", { error: (error as Error).message });
 		return EXIT.fatal;
 	} finally {
+		// Ending a file stream flushes it. stdout belongs to the caller and stays open.
 		if (output !== io.stdout) {
 			await new Promise<void>((resolve) => output.end(resolve));
 		}
@@ -162,6 +172,8 @@ export async function main(
 		return EXIT.fatal;
 	}
 	logSummary(logger, summary);
+	// The order matters. A closed pipe aborts the run itself, so it must win over the
+	// failure count; and the reader chose to stop, which is success.
 	if (pipeClosed) {
 		return EXIT.ok;
 	}
@@ -183,6 +195,8 @@ async function prepare(
 	argv: readonly string[],
 	io: MainIO,
 ): Promise<Setup | "done"> {
+	// Settings are parsed as strings and converted by the config schema, so a bad number
+	// gets the same error message whether it comes from a flag or the config file.
 	const settingOptions = Object.fromEntries(
 		Object.keys(SETTING_FLAGS).map((flag) => [
 			flag,
@@ -259,6 +273,7 @@ async function prepare(
 	return { config, args: positionals, files, output };
 }
 
+/** Failures log at `warn` so they show by default; successes only with `--verbose`. */
 function logRecord(logger: Logger, record: PageRecord): void {
 	if (record.status === "ok") {
 		logger.debug("Fetched", {
@@ -292,6 +307,7 @@ function logSummary(logger: Logger, summary: Summary): void {
 	});
 }
 
+/** `util.parseArgs` signals usage errors only through `code`; it has no error class. */
 function isParseArgsError(error: unknown): error is Error {
 	const code = (error as { code?: unknown } | null)?.code;
 	return typeof code === "string" && code.startsWith("ERR_PARSE_ARGS_");

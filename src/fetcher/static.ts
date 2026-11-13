@@ -1,15 +1,26 @@
 import { FetchError } from "../errors.ts";
 import type { FetchedPage, Fetcher } from "./types.ts";
 
+/** Options for {@link StaticFetcher}. */
 export interface StaticFetcherOptions {
+	/** Limit for one attempt, from sending the request to reading the whole body. */
 	timeoutMs: number;
+	/** Larger bodies fail with `too_large`, without downloading the rest. */
 	maxBodyBytes: number;
+	/** Sent as the `User-Agent` header. */
 	userAgent: string;
 }
 
 const HTML_MEDIA_TYPES = new Set(["text/html", "application/xhtml+xml"]);
 
-/** Fetches raw markup over HTTP with the built-in `fetch`. Does not run JavaScript. */
+/**
+ * Fetches raw markup over HTTP with the built-in `fetch`. Does not run JavaScript.
+ *
+ * Follows redirects, accepts only `text/html` and `application/xhtml+xml` (or a missing
+ * `Content-Type`), and decodes the body using the charset from `Content-Type`, falling
+ * back to UTF-8. Failures reject with a {@link FetchError}: `timeout`, `aborted`,
+ * `network`, `http_status` (with any `Retry-After`), `not_html` or `too_large`.
+ */
 export class StaticFetcher implements Fetcher {
 	readonly #options: StaticFetcherOptions;
 
@@ -31,6 +42,8 @@ export class StaticFetcher implements Fetcher {
 			});
 			return await this.#read(response);
 		} catch (error) {
+			// `combined` does not say which signal fired, so check each. Timeout first, so a
+			// timeout is reported as one even if the run was also interrupted.
 			if (timeout.aborted) {
 				throw new FetchError(
 					"timeout",
@@ -53,6 +66,7 @@ export class StaticFetcher implements Fetcher {
 	async #read(response: Response): Promise<FetchedPage> {
 		const { status } = response;
 		if (!response.ok) {
+			// Unread bodies tie up the connection; cancel releases it for reuse.
 			await response.body?.cancel();
 			const details: { httpStatus: number; retryAfterMs?: number } = {
 				httpStatus: status,
@@ -93,6 +107,8 @@ async function readCapped(
 			httpStatus: response.status,
 		});
 
+	// Reject early when the server declares the size. A missing header gives 0 and a
+	// malformed one NaN; both fail the check, and the stream count below still applies.
 	const declared = Number(response.headers.get("content-length"));
 	if (declared > maxBytes) {
 		await response.body?.cancel();
@@ -120,11 +136,17 @@ function decode(bytes: Uint8Array, charset: string | undefined): string {
 	try {
 		decoder = new TextDecoder(charset ?? "utf-8");
 	} catch {
+		// TextDecoder throws on labels it does not know, such as a misspelled charset.
 		decoder = new TextDecoder("utf-8");
 	}
 	return decoder.decode(bytes);
 }
 
+/**
+ * Splits a `Content-Type` header into its lower-cased media type and charset.
+ *
+ * @returns `undefined` when the header is missing or empty.
+ */
 export function parseContentType(
 	header: string | null,
 ): { mediaType: string; charset?: string } | undefined {
@@ -142,7 +164,13 @@ export function parseContentType(
 	return { mediaType };
 }
 
-/** Parses `Retry-After` as delay-seconds or an HTTP date. */
+/**
+ * Parses `Retry-After` as delay-seconds or an HTTP date.
+ *
+ * @param now - Current time in epoch milliseconds, for date values.
+ * @returns The delay in milliseconds (0 for a date in the past), or `undefined` when the
+ * header is missing or invalid.
+ */
 export function parseRetryAfter(
 	header: string | null,
 	now: number = Date.now(),

@@ -3,6 +3,7 @@ import type { Writable } from "node:stream";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type LogFields = Record<string, string | number | boolean | undefined>;
 
+/** Leveled logger; `fields` with `undefined` values are omitted. */
 export interface Logger {
 	debug(message: string, fields?: LogFields): void;
 	info(message: string, fields?: LogFields): void;
@@ -39,6 +40,7 @@ export function createLogger(stream: Writable, minLevel: LogLevel): Logger {
 	};
 }
 
+/** Bare values cannot hold spaces, quotes or `=` in logfmt; JSON quoting escapes them. Empty strings become `""`. */
 function quote(value: string): string {
 	return /^[^\s"=]+$/.test(value) ? value : JSON.stringify(value);
 }

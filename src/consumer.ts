@@ -2,6 +2,10 @@ import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import type { BoundedQueue } from "./queue.ts";
 import { errorRecord, type FetchedItem, type PageRecord } from "./records.ts";
 
+/**
+ * Turns a page's markup into absolute links; `extractLinks` by default. Throwing marks
+ * that one page as a `parse` error.
+ */
 export type LinkExtractor = (html: string, pageUrl: string) => string[];
 
 /**

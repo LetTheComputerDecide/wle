@@ -1,6 +1,14 @@
+/**
+ * What `put` does when the queue is full.
+ *
+ * - `block`: wait until a consumer takes an item. Nothing is lost; producers slow down.
+ * - `drop-oldest`: evict the oldest buffered item to make room. Producers never wait.
+ */
 export type OverflowPolicy = "block" | "drop-oldest";
 
+/** Options for {@link BoundedQueue}. */
 export interface BoundedQueueOptions<T> {
+	/** Maximum number of buffered items. Must be a positive integer. */
 	capacity: number;
 	/** What `put` does when the queue is full. Defaults to `block`. */
 	overflow?: OverflowPolicy;
@@ -8,6 +16,7 @@ export interface BoundedQueueOptions<T> {
 	onDrop?: (item: T) => void;
 }
 
+/** Rejection reason for `put` on a queue that has been closed. */
 export class QueueClosedError extends Error {
 	constructor() {
 		super("Queue is closed");
@@ -31,6 +40,19 @@ const DONE: IteratorReturnResult<undefined> = { done: true, value: undefined };
  * (`drop-oldest`). After `close`, further puts are rejected, but everything already
  * accepted, including puts still waiting for space, is delivered before consumers see
  * the end of the queue.
+ *
+ * Items are delivered in the order they were accepted, and each to exactly one consumer.
+ *
+ * @example
+ * ```ts
+ * const queue = new BoundedQueue<string>({ capacity: 10 });
+ * const consumer = (async () => {
+ *   for await (const item of queue) console.log(item);
+ * })();
+ * await queue.put("a");
+ * queue.close();
+ * await consumer; // logs "a", then ends
+ * ```
  */
 export class BoundedQueue<T> implements AsyncIterable<T> {
 	readonly capacity: number;
@@ -42,6 +64,7 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 	#closed = false;
 	#peakSize = 0;
 
+	/** @throws {RangeError} If `capacity` is not a positive integer. */
 	constructor(options: BoundedQueueOptions<T>) {
 		if (!Number.isInteger(options.capacity) || options.capacity < 1) {
 			throw new RangeError(
@@ -63,10 +86,21 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 		return this.#peakSize;
 	}
 
+	/** Whether `close` has been called. Items may still be waiting to be taken. */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
+	/**
+	 * Adds an item to the back of the queue.
+	 *
+	 * Resolves once the item is accepted: immediately if there is room (or under
+	 * `drop-oldest`), otherwise when a consumer frees a slot.
+	 *
+	 * @throws {QueueClosedError} (as a rejection) If the queue is closed.
+	 * Under `drop-oldest`, also rejects with whatever `onDrop` throws; the new item is
+	 * accepted regardless.
+	 */
 	put(item: T): Promise<void> {
 		if (this.#closed) {
 			return Promise.reject(new QueueClosedError());
@@ -82,7 +116,9 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 			return Promise.resolve();
 		}
 		if (this.overflow === "drop-oldest") {
+			// The buffer is full, so there is an oldest item to drop.
 			const dropped = this.#items.shift() as T;
+			// Buffer first, so the queue is consistent even if `onDrop` throws or re-enters.
 			this.#buffer(item);
 			try {
 				this.#onDrop?.(dropped);
@@ -94,10 +130,17 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 		return new Promise((resolve) => this.#putters.push({ item, resolve }));
 	}
 
-	/** Resolves with the next item, or with `done` once the queue is closed and drained. */
+	/**
+	 * Removes and returns the item at the front of the queue, waiting if it is empty.
+	 *
+	 * @returns The next item as `{ done: false, value }`, or `{ done: true }` once the
+	 * queue is closed and everything accepted has been taken.
+	 */
 	take(): Promise<IteratorResult<T, undefined>> {
 		if (this.#items.length > 0) {
 			const value = this.#items.shift() as T;
+			// Pending puts only exist while the buffer is full, so one slot just opened:
+			// move the oldest waiting item in, keeping FIFO order, and release its putter.
 			const putter = this.#putters.shift();
 			if (putter) {
 				this.#buffer(putter.item);
@@ -111,7 +154,12 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 		return new Promise((resolve) => this.#takers.push(resolve));
 	}
 
-	/** Marks the end of input. Idempotent. */
+	/**
+	 * Marks the end of input. Idempotent.
+	 *
+	 * Later puts reject. Buffered items and puts already waiting for space are still
+	 * delivered; consumers then see the end of the queue.
+	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -127,6 +175,7 @@ export class BoundedQueue<T> implements AsyncIterable<T> {
 		}
 	}
 
+	/** Takes items until the queue is closed and drained. Breaking out early takes nothing more. */
 	async *[Symbol.asyncIterator](): AsyncGenerator<T, void, undefined> {
 		while (true) {
 			const result = await this.take();
@@ -162,6 +211,8 @@ class Fifo<T> {
 		}
 		const item = this.#items[this.#head];
 		this.#head++;
+		// Compact once at least half the array is consumed slots. Each copy is paid for by
+		// as many earlier shifts, which keeps `shift` amortised O(1).
 		if (this.#head * 2 >= this.#items.length) {
 			this.#items = this.#items.slice(this.#head);
 			this.#head = 0;

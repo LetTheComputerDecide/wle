@@ -40,6 +40,7 @@ export async function produce(
 	let index = 0;
 
 	for await (const input of inputs) {
+		// A fatal error elsewhere: stop reading. Breaking also closes the input iterator.
 		if (failure) {
 			break;
 		}
@@ -54,12 +55,20 @@ export async function produce(
 			);
 			break;
 		}
+		// Tasks never reject: the first error is kept and rethrown once all have settled.
+		// Otherwise a rejection would end the race below while siblings were still running,
+		// and their later rejections would go unhandled.
 		const task = produceOne(index++, input, options, deps, hosts)
 			.catch((error: unknown) => {
 				failure ??= { error };
 			})
+			// Runs asynchronously, so `task` is assigned by the time this callback reads it.
 			.finally(() => inFlight.delete(task));
 		inFlight.add(task);
+		// The window: once `concurrency` URLs are in flight, wait for any one to finish
+		// before reading the next input. This is both the global fetch limit and the bound
+		// on read-ahead. A URL waiting on a busy host still holds a slot, so one slow host
+		// can hold up the others (head-of-line blocking, see README).
 		if (inFlight.size >= options.concurrency) {
 			await Promise.race(inFlight);
 		}
@@ -117,6 +126,8 @@ async function produceOne(
 		);
 		return;
 	}
+	// Under the `block` policy this waits while the queue is full. The task keeps its slot
+	// in the window meanwhile, so slow consumers throttle fetching (backpressure).
 	await deps.queue.put({ ...base, ...result.value });
 }
 
@@ -150,6 +161,8 @@ class HostLimiters {
 		try {
 			return await limiter(fn);
 		} finally {
+			// p-limit lowers `activeCount` before the caller resumes, so this sees the call
+			// above as finished. Calls still queued for the host keep the limiter alive.
 			if (limiter.activeCount === 0 && limiter.pendingCount === 0) {
 				this.#limiters.delete(host);
 			}

@@ -5,4 +5,5 @@ const pkg = JSON.parse(
 	readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as { version: string };
 
+/** This package's version, from package.json. */
 export const VERSION = pkg.version;
