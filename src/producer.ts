@@ -115,9 +115,13 @@ async function produceOne(
 	// The host slot is taken per attempt, so it is free while a retry backs off.
 	const result = await withRetry(
 		() => {
-			const queuedAt = deps.now();
+			// Timed only when the host has no free slot. With a free slot the operation still
+			// starts a few promise steps later, which a slow machine would count as waiting.
+			const queuedAt = hostLimiters.isFull(url.host) ? deps.now() : undefined;
 			return hostLimiters.run(url.host, () => {
-				hostWaitMs += deps.now() - queuedAt;
+				if (queuedAt !== undefined) {
+					hostWaitMs += deps.now() - queuedAt;
+				}
 				return deps.fetcher.fetch(url, deps.signal);
 			});
 		},
@@ -170,6 +174,12 @@ class HostLimiters {
 
 	constructor(concurrency: number) {
 		this.#concurrency = concurrency;
+	}
+
+	/** Whether every slot for `host` is taken, so a call to `run` now would have to queue. */
+	isFull(host: string): boolean {
+		const limiter = this.#limiters.get(host);
+		return limiter !== undefined && limiter.activeCount >= this.#concurrency;
 	}
 
 	async run<T>(host: string, operation: () => Promise<T>): Promise<T> {

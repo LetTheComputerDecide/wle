@@ -268,8 +268,23 @@ describe("runPipeline", () => {
 				{ perHostConcurrency: 1 },
 			);
 			for (const record of records) {
-				expect(record.hostWaitMs).toBeLessThan(10);
+				expect(record.hostWaitMs).toBe(0);
 			}
+		});
+
+		// CI once reported a 1 ms wait for URLs that never queued: on a slow machine, the
+		// time p-limit takes to start an operation was counted as waiting. A clock that jumps
+		// 5 ms on every reading makes any such gap visible.
+		test("URLs that never queue for their host record no wait, however slow the machine", async () => {
+			let clock = 0;
+			const { records, summary } = await run(
+				urls(3),
+				new FakeFetcher(),
+				{ perHostConcurrency: 4 },
+				{ now: () => (clock += 5) },
+			);
+			expect(records.map((record) => record.hostWaitMs)).toEqual([0, 0, 0]);
+			expect(summary).toMatchObject({ hostWaited: 0, maxHostWaitMs: 0 });
 		});
 
 		test("reads inputs lazily, no further ahead than the concurrency limit", async () => {
