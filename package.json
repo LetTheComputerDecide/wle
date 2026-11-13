@@ -13,6 +13,7 @@
 	"packageManager": "pnpm@12.1.0",
 	"scripts": {
 		"start": "node src/cli.ts",
+		"demo-server": "node examples/server.ts",
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",

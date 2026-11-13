@@ -1,0 +1,66 @@
+# Many large pages fetched 32 at a time, into a queue that holds only 5, with one consumer.
+# The queue can never hold more than queueCapacity; what happens when it is full depends on
+# the overflow policy:
+#   block.json        fetching pauses until there is room (backpressure). Every URL ok.
+#   drop-oldest.json  the oldest waiting page is evicted. Evicted URLs get a "dropped" record.
+# Expect: peakQueue=5 with both.
+http://127.0.0.1:8787/big/1
+http://127.0.0.1:8787/big/2
+http://127.0.0.1:8787/big/3
+http://127.0.0.1:8787/big/4
+http://127.0.0.1:8787/big/5
+http://127.0.0.1:8787/big/6
+http://127.0.0.1:8787/big/7
+http://127.0.0.1:8787/big/8
+http://127.0.0.1:8787/big/9
+http://127.0.0.1:8787/big/10
+http://127.0.0.1:8787/big/11
+http://127.0.0.1:8787/big/12
+http://127.0.0.1:8787/big/13
+http://127.0.0.1:8787/big/14
+http://127.0.0.1:8787/big/15
+http://127.0.0.1:8787/big/16
+http://127.0.0.1:8787/big/17
+http://127.0.0.1:8787/big/18
+http://127.0.0.1:8787/big/19
+http://127.0.0.1:8787/big/20
+http://127.0.0.1:8787/big/21
+http://127.0.0.1:8787/big/22
+http://127.0.0.1:8787/big/23
+http://127.0.0.1:8787/big/24
+http://127.0.0.1:8787/big/25
+http://127.0.0.1:8787/big/26
+http://127.0.0.1:8787/big/27
+http://127.0.0.1:8787/big/28
+http://127.0.0.1:8787/big/29
+http://127.0.0.1:8787/big/30
+http://127.0.0.1:8787/big/31
+http://127.0.0.1:8787/big/32
+http://127.0.0.1:8787/big/33
+http://127.0.0.1:8787/big/34
+http://127.0.0.1:8787/big/35
+http://127.0.0.1:8787/big/36
+http://127.0.0.1:8787/big/37
+http://127.0.0.1:8787/big/38
+http://127.0.0.1:8787/big/39
+http://127.0.0.1:8787/big/40
+http://127.0.0.1:8787/big/41
+http://127.0.0.1:8787/big/42
+http://127.0.0.1:8787/big/43
+http://127.0.0.1:8787/big/44
+http://127.0.0.1:8787/big/45
+http://127.0.0.1:8787/big/46
+http://127.0.0.1:8787/big/47
+http://127.0.0.1:8787/big/48
+http://127.0.0.1:8787/big/49
+http://127.0.0.1:8787/big/50
+http://127.0.0.1:8787/big/51
+http://127.0.0.1:8787/big/52
+http://127.0.0.1:8787/big/53
+http://127.0.0.1:8787/big/54
+http://127.0.0.1:8787/big/55
+http://127.0.0.1:8787/big/56
+http://127.0.0.1:8787/big/57
+http://127.0.0.1:8787/big/58
+http://127.0.0.1:8787/big/59
+http://127.0.0.1:8787/big/60

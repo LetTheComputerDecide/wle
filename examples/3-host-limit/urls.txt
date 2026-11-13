@@ -1,0 +1,21 @@
+# Pages that each take 300 ms, on two hosts (the same server on two ports counts as two
+# hosts). perHostConcurrency is 2, so each host serves two at a time and the rest wait,
+# even though the global limit (16) has room.
+# Expect, with -v: on 8787, hostWaitMs of about 0, 0, 300, 300, 600, 600, 900, 900;
+# on 8788, about 0, 0, 300, 300. The summary shows hostWaited=8 and maxHostWaitMs of about 900.
+
+# Host 1: eight pages
+http://127.0.0.1:8787/slow/1?ms=300
+http://127.0.0.1:8787/slow/2?ms=300
+http://127.0.0.1:8787/slow/3?ms=300
+http://127.0.0.1:8787/slow/4?ms=300
+http://127.0.0.1:8787/slow/5?ms=300
+http://127.0.0.1:8787/slow/6?ms=300
+http://127.0.0.1:8787/slow/7?ms=300
+http://127.0.0.1:8787/slow/8?ms=300
+
+# Host 2: four pages, not held up by host 1
+http://127.0.0.1:8788/slow/1?ms=300
+http://127.0.0.1:8788/slow/2?ms=300
+http://127.0.0.1:8788/slow/3?ms=300
+http://127.0.0.1:8788/slow/4?ms=300

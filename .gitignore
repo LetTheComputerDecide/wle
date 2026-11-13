@@ -1,3 +1,4 @@
 node_modules/
 dist/
 coverage/
+examples/7-large-input/urls.txt

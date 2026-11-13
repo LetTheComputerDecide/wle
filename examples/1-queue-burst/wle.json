@@ -1,0 +1,7 @@
+{
+	"$schema": "../../config.schema.json",
+	"concurrency": 16,
+	"perHostConcurrency": 16,
+	"consumers": 1,
+	"queueCapacity": 100
+}

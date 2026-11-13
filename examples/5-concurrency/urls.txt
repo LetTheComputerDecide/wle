@@ -1,0 +1,23 @@
+# Twenty pages that each take 300 ms to respond. Run with each config and compare the time:
+#   sequential.json  one fetch at a time: about 20 x 300 ms = 6 s
+#   concurrent.json  sixteen at a time: two rounds, about 0.6 s
+http://127.0.0.1:8787/slow/1?ms=300
+http://127.0.0.1:8787/slow/2?ms=300
+http://127.0.0.1:8787/slow/3?ms=300
+http://127.0.0.1:8787/slow/4?ms=300
+http://127.0.0.1:8787/slow/5?ms=300
+http://127.0.0.1:8787/slow/6?ms=300
+http://127.0.0.1:8787/slow/7?ms=300
+http://127.0.0.1:8787/slow/8?ms=300
+http://127.0.0.1:8787/slow/9?ms=300
+http://127.0.0.1:8787/slow/10?ms=300
+http://127.0.0.1:8787/slow/11?ms=300
+http://127.0.0.1:8787/slow/12?ms=300
+http://127.0.0.1:8787/slow/13?ms=300
+http://127.0.0.1:8787/slow/14?ms=300
+http://127.0.0.1:8787/slow/15?ms=300
+http://127.0.0.1:8787/slow/16?ms=300
+http://127.0.0.1:8787/slow/17?ms=300
+http://127.0.0.1:8787/slow/18?ms=300
+http://127.0.0.1:8787/slow/19?ms=300
+http://127.0.0.1:8787/slow/20?ms=300

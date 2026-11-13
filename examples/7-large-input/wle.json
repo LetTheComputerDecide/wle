@@ -1,0 +1,5 @@
+{
+	"$schema": "../../config.schema.json",
+	"concurrency": 64,
+	"perHostConcurrency": 64
+}

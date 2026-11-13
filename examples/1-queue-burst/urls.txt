@@ -1,0 +1,23 @@
+# A burst of large pages: they arrive faster than one consumer can parse them, so they
+# wait briefly on the queue. With queueCapacity 100, the burst fits easily.
+# Expect: every URL ok; peakQueue above 0 but far below 100.
+http://127.0.0.1:8787/big/1
+http://127.0.0.1:8787/big/2
+http://127.0.0.1:8787/big/3
+http://127.0.0.1:8787/big/4
+http://127.0.0.1:8787/big/5
+http://127.0.0.1:8787/big/6
+http://127.0.0.1:8787/big/7
+http://127.0.0.1:8787/big/8
+http://127.0.0.1:8787/big/9
+http://127.0.0.1:8787/big/10
+http://127.0.0.1:8787/big/11
+http://127.0.0.1:8787/big/12
+http://127.0.0.1:8787/big/13
+http://127.0.0.1:8787/big/14
+http://127.0.0.1:8787/big/15
+http://127.0.0.1:8787/big/16
+http://127.0.0.1:8787/big/17
+http://127.0.0.1:8787/big/18
+http://127.0.0.1:8787/big/19
+http://127.0.0.1:8787/big/20

@@ -1,0 +1,26 @@
+# Example input for wle: one URL per line. Blank lines and lines starting with # are skipped.
+# Run with: pnpm start --file examples/urls.txt --format text
+
+# Pages with plenty of links
+https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem
+https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a
+https://news.ycombinator.com/
+https://nodejs.org/en
+
+# Several pages on one host, so the per-host limit applies
+https://en.wikipedia.org/wiki/Queue_(abstract_data_type)
+https://en.wikipedia.org/wiki/Backpressure_routing
+https://en.wikipedia.org/wiki/Web_crawler
+
+# A page with no links at all
+https://example.com/
+
+# A redirect: http to https, reported with its final URL
+http://wikipedia.org/
+
+# Failures, each reported as its own error record without affecting the others
+https://en.wikipedia.org/wiki/This_page_does_not_exist_wle_example
+https://www.rfc-editor.org/rfc/rfc9110.txt
+https://example.invalid/
+ftp://ftp.example.com/
+not a url

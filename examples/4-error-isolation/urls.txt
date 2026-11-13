@@ -1,0 +1,33 @@
+# Working pages mixed with one URL for each kind of failure. Each failure becomes its own
+# error record, and every working page is still fetched and parsed.
+# Expect: 5 ok (including the flaky page, which succeeds on retry) and 9 errors; exit code 2.
+
+http://127.0.0.1:8787/page/1
+http://127.0.0.1:8787/page/2
+
+# Fails with 503, then succeeds: retried, so it ends up ok with attempts=2
+http://127.0.0.1:8787/flaky/1
+
+# http_status: 404 is not retried; 500 is retried, then reported
+http://127.0.0.1:8787/status/404
+http://127.0.0.1:8787/status/500
+
+# not_html: served as text/plain
+http://127.0.0.1:8787/text
+
+# too_large: about 1.2 MB, over this demo's maxBodyBytes of 1 MB
+http://127.0.0.1:8787/big/1
+
+# timeout: never responds, so it times out after 1 s (and once more on retry)
+http://127.0.0.1:8787/hang
+
+# network: a redirect loop, and a port nothing listens on (connection refused)
+http://127.0.0.1:8787/redirect-loop
+http://127.0.0.1:8799/
+
+# invalid_url: rejected before any request
+ftp://127.0.0.1/file
+not a url
+
+http://127.0.0.1:8788/page/3
+http://127.0.0.1:8788/page/4

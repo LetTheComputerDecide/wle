@@ -40,6 +40,16 @@ pnpm start --file urls.txt    # one URL per line; blank lines and # comments ski
 node src/cli.ts --help        # every option (pnpm keeps --help for itself)
 ```
 
+To try it, [`examples/urls.txt`](examples/urls.txt) has a mix of working pages, a redirect and one URL for each kind of failure:
+
+```sh
+pnpm start --file examples/urls.txt --format text
+```
+
+It exits with code 2, because some of those URLs fail on purpose.
+
+[`examples/`](examples/README.md) also has repeatable demos against a local server (`pnpm demo-server`): the queue absorbing a burst, the queue filling up under each overflow policy, per-host limiting, error isolation, the speed-up from concurrent fetching, graceful Ctrl-C, and a large input in constant memory.
+
 Each run reads its URLs from one file. Lines are trimmed, blank lines and `#` comments are skipped, and the file is read lazily, so a list of millions of URLs is never held in memory.
 
 With Docker:

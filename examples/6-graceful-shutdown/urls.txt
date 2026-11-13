@@ -1,0 +1,33 @@
+# Thirty pages that each take 2 s, fetched 4 at a time, so the run would take about 15 s.
+# Press Ctrl-C after a few seconds. Expect: the pages already fetched are still output, the
+# ones in progress get "aborted" records, the summary is logged, and the exit code is 130.
+http://127.0.0.1:8787/slow/1?ms=2000
+http://127.0.0.1:8787/slow/2?ms=2000
+http://127.0.0.1:8787/slow/3?ms=2000
+http://127.0.0.1:8787/slow/4?ms=2000
+http://127.0.0.1:8787/slow/5?ms=2000
+http://127.0.0.1:8787/slow/6?ms=2000
+http://127.0.0.1:8787/slow/7?ms=2000
+http://127.0.0.1:8787/slow/8?ms=2000
+http://127.0.0.1:8787/slow/9?ms=2000
+http://127.0.0.1:8787/slow/10?ms=2000
+http://127.0.0.1:8787/slow/11?ms=2000
+http://127.0.0.1:8787/slow/12?ms=2000
+http://127.0.0.1:8787/slow/13?ms=2000
+http://127.0.0.1:8787/slow/14?ms=2000
+http://127.0.0.1:8787/slow/15?ms=2000
+http://127.0.0.1:8787/slow/16?ms=2000
+http://127.0.0.1:8787/slow/17?ms=2000
+http://127.0.0.1:8787/slow/18?ms=2000
+http://127.0.0.1:8787/slow/19?ms=2000
+http://127.0.0.1:8787/slow/20?ms=2000
+http://127.0.0.1:8787/slow/21?ms=2000
+http://127.0.0.1:8787/slow/22?ms=2000
+http://127.0.0.1:8787/slow/23?ms=2000
+http://127.0.0.1:8787/slow/24?ms=2000
+http://127.0.0.1:8787/slow/25?ms=2000
+http://127.0.0.1:8787/slow/26?ms=2000
+http://127.0.0.1:8787/slow/27?ms=2000
+http://127.0.0.1:8787/slow/28?ms=2000
+http://127.0.0.1:8787/slow/29?ms=2000
+http://127.0.0.1:8787/slow/30?ms=2000
