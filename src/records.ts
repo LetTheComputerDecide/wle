@@ -12,6 +12,11 @@ interface RecordBase {
 	attempts: number;
 	/** Time spent fetching, including waits for a host slot, retries and backoff; excludes time on the queue. */
 	durationMs: number;
+	/**
+	 * The part of `durationMs` spent waiting for a free slot on the URL's host
+	 * (`perHostConcurrency`), summed over attempts. 0 when the host was never busy.
+	 */
+	hostWaitMs: number;
 }
 
 /** A page that was fetched and parsed. */
@@ -54,6 +59,7 @@ export interface FetchedItem {
 	html: string;
 	attempts: number;
 	durationMs: number;
+	hostWaitMs: number;
 }
 
 /** Builds an error record, keeping the key order used by the other records. */

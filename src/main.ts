@@ -280,6 +280,7 @@ function logRecord(logger: Logger, record: PageRecord): void {
 			url: record.url,
 			links: record.links.length,
 			ms: record.durationMs,
+			hostWaitMs: record.hostWaitMs || undefined,
 			attempts: record.attempts,
 		});
 	} else {
@@ -288,6 +289,7 @@ function logRecord(logger: Logger, record: PageRecord): void {
 			kind: record.error.kind,
 			error: record.error.message,
 			attempts: record.attempts,
+			hostWaitMs: record.hostWaitMs || undefined,
 		});
 	}
 }
@@ -302,6 +304,8 @@ function logSummary(logger: Logger, summary: Summary): void {
 		failed: summary.failed,
 		errors: errors || undefined,
 		peakQueue: summary.peakQueueSize,
+		hostWaited: summary.hostWaited,
+		maxHostWaitMs: summary.maxHostWaitMs,
 		p50Ms: summary.fetchMs?.p50,
 		p95Ms: summary.fetchMs?.p95,
 	});

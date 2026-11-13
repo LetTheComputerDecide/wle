@@ -99,6 +99,7 @@ describe("runPipeline", () => {
 				links: ["https://example.com/link"],
 				attempts: 1,
 				durationMs: expect.any(Number),
+				hostWaitMs: expect.any(Number),
 			})),
 		);
 		expect(summary).toMatchObject({ total: 3, ok: 3, failed: 0, errors: {} });
@@ -178,6 +179,7 @@ describe("runPipeline", () => {
 				status: "error",
 				attempts: 0,
 				durationMs: 0,
+				hostWaitMs: 0,
 				error: { kind: "invalid_url", message },
 			});
 			expect(byInputIndex[1]?.status).toBe("ok");
@@ -233,6 +235,41 @@ describe("runPipeline", () => {
 			});
 			await run(urls(10), fetcher, { concurrency: 8, perHostConcurrency: 2 });
 			expect(fetcher.maxActiveByHost).toBe(2);
+		});
+
+		test("reports time spent waiting for a busy host", async () => {
+			const fetcher = new FakeFetcher(async (url) => {
+				await tick(30);
+				return page(url);
+			});
+			const { byInputIndex, summary } = await run(urls(3), fetcher, {
+				perHostConcurrency: 1,
+			});
+			// One slot for the host: the second URL waits for one fetch, the third for two.
+			const waits = byInputIndex.map((record) => record.hostWaitMs);
+			expect(waits[0]).toBeLessThan(10);
+			expect(waits[1]).toBeGreaterThanOrEqual(20);
+			expect(waits[2]).toBeGreaterThanOrEqual(45);
+			for (const record of byInputIndex) {
+				expect(record.hostWaitMs).toBeLessThanOrEqual(record.durationMs);
+			}
+			expect(summary.hostWaited).toBeGreaterThanOrEqual(2);
+			expect(summary.maxHostWaitMs).toBe(Math.max(...waits));
+		});
+
+		test("URLs on different hosts do not wait for each other", async () => {
+			const fetcher = new FakeFetcher(async (url) => {
+				await tick(30);
+				return page(url);
+			});
+			const { records } = await run(
+				["https://a.example/", "https://b.example/", "https://c.example/"],
+				fetcher,
+				{ perHostConcurrency: 1 },
+			);
+			for (const record of records) {
+				expect(record.hostWaitMs).toBeLessThan(10);
+			}
 		});
 
 		test("reads inputs lazily, no further ahead than the concurrency limit", async () => {

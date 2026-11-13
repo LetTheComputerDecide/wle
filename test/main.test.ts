@@ -65,6 +65,7 @@ describe("main", () => {
 			links: [server.url("/a"), server.url("/b")],
 		});
 		expect(stderr).toMatch(/^level=info msg=Finished total=2 ok=2 failed=0 /m);
+		expect(stderr).toContain("hostWaited=0 maxHostWaitMs=0");
 		expect(stdout).not.toContain("level=");
 	});
 

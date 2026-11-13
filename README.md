@@ -9,14 +9,14 @@ $ cat urls.txt
 https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem
 https://example.invalid/
 $ wle --format text --file urls.txt
-✓ https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem (164 links, 162 ms)
+✓ https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem (164 links, 226 ms)
     https://en.wikipedia.org/wiki/Main_Page
     https://en.wikipedia.org/wiki/Wikipedia:Contents
     …
 ✗ https://example.invalid/
     network: fetch failed: ENOTFOUND
 level=warn msg=Failed url=https://example.invalid/ kind=network error="fetch failed: ENOTFOUND" attempts=3
-level=info msg=Finished total=2 ok=1 failed=1 errors=network:1 peakQueue=0 p50Ms=162 p95Ms=566
+level=info msg=Finished total=2 ok=1 failed=1 errors=network:1 peakQueue=0 hostWaited=0 maxHostWaitMs=0 p50Ms=226 p95Ms=249
 ```
 
 ## Contents
@@ -52,7 +52,7 @@ docker run --rm -v "$PWD:/data:ro" wle --file /data/urls.txt
 Development:
 
 ```sh
-pnpm test        # 201 tests, about 1 s, no network access
+pnpm test        # 205 tests, about 1 s, no network access
 pnpm coverage    # with a coverage report
 pnpm lint        # Biome
 pnpm typecheck   # tsc --strict
@@ -68,9 +68,11 @@ Records are written as each URL completes, not in input order, so one slow URL n
 The default format is JSON Lines:
 
 ```json
-{"inputIndex":0,"url":"https://a.example/","status":"ok","attempts":1,"durationMs":212,"finalUrl":"https://a.example/home","httpStatus":200,"links":["https://a.example/about","mailto:hi@a.example"]}
-{"inputIndex":1,"url":"https://b.example/","status":"error","attempts":3,"durationMs":10457,"error":{"kind":"timeout","message":"Timed out after 10000 ms"}}
+{"inputIndex":0,"url":"https://a.example/","status":"ok","attempts":1,"durationMs":212,"hostWaitMs":0,"finalUrl":"https://a.example/home","httpStatus":200,"links":["https://a.example/about","mailto:hi@a.example"]}
+{"inputIndex":1,"url":"https://b.example/","status":"error","attempts":3,"durationMs":10457,"hostWaitMs":180,"error":{"kind":"timeout","message":"Timed out after 10000 ms"}}
 ```
+
+`durationMs` is the time spent on the URL, from the first attempt to the last, including backoff between retries. `hostWaitMs` is the part of it spent waiting for a free slot on the URL's host because of `--per-host-concurrency`. A large value means the URL was queued behind others for the same site, not that the site was slow. The summary at the end reports how many URLs waited (`hostWaited`) and the longest wait (`maxHostWaitMs`); run with `-v` to see `hostWaitMs` for each URL in the logs.
 
 `--format text` gives the human-readable form shown at the top.
 
@@ -159,7 +161,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 | Parses HTML and outputs the hyperlinks for each URL | `extractLinks`; one record per URL, to stdout or a file |
 | Producer and consumer run concurrently | Both run as concurrent async tasks over the shared queue. A test makes page 2's fetch wait until page 1 has been *parsed and emitted*, which can only finish if they truly overlap |
 | Error isolation | Every failure (invalid URL, fetch, HTTP status, parse) becomes a record for that URL only. Tests inject each kind of failure and check the other URLs are unaffected |
-| Unit tests | 201 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
+| Unit tests | 205 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
 | **Bonus:** URLs fetched concurrently | Global limit (`--concurrency`) plus a per-host limit to be polite to any one server |
 | **Bonus:** trim oldest entries when the queue balloons | `--overflow drop-oldest`: a full queue evicts its oldest page, which is reported as a `dropped` record rather than lost silently. The peak queue depth is in the summary |
 | **Bonus:** comprehensive tests | About 96% statement coverage; see [Testing](#testing) |
@@ -201,7 +203,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 
 ## Testing
 
-`pnpm test` runs 201 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
+`pnpm test` runs 205 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
 
 | Kind | What | Where |
 |---|---|---|

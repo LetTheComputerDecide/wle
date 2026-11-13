@@ -13,6 +13,7 @@ const ok: OkRecord = {
 	links: ["https://example.com/a", "https://example.com/b"],
 	attempts: 1,
 	durationMs: 42,
+	hostWaitMs: 0,
 };
 
 const failed: ErrorRecord = {
@@ -22,6 +23,7 @@ const failed: ErrorRecord = {
 	httpStatus: 404,
 	attempts: 1,
 	durationMs: 7,
+	hostWaitMs: 0,
 	error: { kind: "http_status", message: "HTTP 404" },
 };
 

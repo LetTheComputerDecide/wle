@@ -53,6 +53,7 @@ export async function produce(
 						url: input,
 						attempts: 0,
 						durationMs: 0,
+						hostWaitMs: 0,
 					},
 					"aborted",
 					"Aborted before fetching",
@@ -101,7 +102,7 @@ async function produceOne(
 	if (typeof url === "string") {
 		deps.emit(
 			errorRecord(
-				{ inputIndex, url: input, attempts: 0, durationMs: 0 },
+				{ inputIndex, url: input, attempts: 0, durationMs: 0, hostWaitMs: 0 },
 				"invalid_url",
 				url,
 			),
@@ -110,10 +111,16 @@ async function produceOne(
 	}
 
 	const started = deps.now();
+	let hostWaitMs = 0;
 	// The host slot is taken per attempt, so it is free while a retry backs off.
 	const result = await withRetry(
-		() =>
-			hostLimiters.run(url.host, () => deps.fetcher.fetch(url, deps.signal)),
+		() => {
+			const queuedAt = deps.now();
+			return hostLimiters.run(url.host, () => {
+				hostWaitMs += deps.now() - queuedAt;
+				return deps.fetcher.fetch(url, deps.signal);
+			});
+		},
 		options.retry,
 		deps.signal,
 		deps.retryDeps,
@@ -123,6 +130,7 @@ async function produceOne(
 		url: input,
 		attempts: result.attempts,
 		durationMs: Math.round(deps.now() - started),
+		hostWaitMs: Math.round(hostWaitMs),
 	};
 
 	if (!result.ok) {

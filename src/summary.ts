@@ -11,6 +11,10 @@ export interface Summary {
 	errors: Partial<Record<ErrorKind, number>>;
 	/** Most pages buffered on the queue at once; near capacity suggests slow consumers. */
 	peakQueueSize: number;
+	/** URLs that waited for a free slot on their host; many suggests `perHostConcurrency` is the limit. */
+	hostWaited: number;
+	/** Longest host wait for one URL, summed over its attempts; 0 when none waited. */
+	maxHostWaitMs: number;
 	/** Fetch duration percentiles over URLs that were actually fetched. */
 	fetchMs: { p50: number; p95: number } | undefined;
 }
@@ -21,6 +25,8 @@ export class SummaryCollector {
 	#failed = 0;
 	readonly #errors: Partial<Record<ErrorKind, number>> = {};
 	readonly #durations: number[] = [];
+	#hostWaited = 0;
+	#maxHostWaitMs = 0;
 
 	add(record: PageRecord): void {
 		if (record.status === "ok") {
@@ -33,6 +39,10 @@ export class SummaryCollector {
 		if (record.attempts > 0) {
 			this.#durations.push(record.durationMs);
 		}
+		if (record.hostWaitMs > 0) {
+			this.#hostWaited++;
+			this.#maxHostWaitMs = Math.max(this.#maxHostWaitMs, record.hostWaitMs);
+		}
 	}
 
 	finish(peakQueueSize: number): Summary {
@@ -43,6 +53,8 @@ export class SummaryCollector {
 			failed: this.#failed,
 			errors: { ...this.#errors },
 			peakQueueSize,
+			hostWaited: this.#hostWaited,
+			maxHostWaitMs: this.#maxHostWaitMs,
 			fetchMs:
 				sorted.length === 0
 					? undefined
