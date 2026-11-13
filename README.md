@@ -56,8 +56,25 @@ With Docker:
 
 ```sh
 docker build -t wle .
-docker run --rm -v "$PWD:/data:ro" wle --file /data/urls.txt
+docker run --rm wle --help
 ```
+
+The image's entry point is the CLI, so arguments after `wle` go straight to it. The container cannot see your files, so mount the folder holding the URL file and pass the path *inside* the container:
+
+```sh
+docker run --rm -v "$PWD/examples:/data:ro" wle --file /data/urls.txt --format text
+docker run --rm -v "$PWD/examples:/data:ro" wle --file /data/urls.txt > links.jsonl   # records to a file on your machine; logs stay in the terminal
+```
+
+- **The demos in [`examples/`](examples/README.md)** need the demo server, which runs on your machine. Inside a container, `127.0.0.1` is the container itself, so add `--network host` to reach the server. Config files are mounted and passed the same way as URL files:
+
+  ```sh
+  docker run --rm --network host -v "$PWD/examples:/data:ro" wle -c /data/4-error-isolation/wle.json -f /data/4-error-isolation/urls.txt
+  ```
+
+  Host networking is native on Linux; on macOS and Windows, Docker Desktop has offered it only in recent versions, as an opt-in setting.
+- **On SELinux systems** (Fedora, RHEL), add `,Z` to the mount (`-v "$PWD/examples:/data:ro,Z"`), or the container is denied access to the files.
+- **Ctrl-C and `docker stop`** stop the run gracefully, as they do outside the container: records already fetched are written, the summary is logged, and the exit code is 130.
 
 Development:
 
