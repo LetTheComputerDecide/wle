@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { EXIT, main } from "./main.ts";
+import { main } from "./main.ts";
 
 const controller = new AbortController();
 
@@ -7,7 +7,13 @@ const controller = new AbortController();
 // summary. Second signal: give up immediately.
 const onSignal = (signal: NodeJS.Signals) => {
 	if (controller.signal.aborted) {
-		process.exit(EXIT.interrupted);
+		// Not process.exit(): it waits for Node's worker threads, so it hangs if one is stuck
+		// in a blocking call (such as opening a named pipe nobody reads). Re-raising the
+		// signal with our handlers removed lets the OS end the process; shells report 130.
+		process.removeListener("SIGINT", onSignal);
+		process.removeListener("SIGTERM", onSignal);
+		process.kill(process.pid, signal);
+		return;
 	}
 	process.stderr.write(
 		`\nReceived ${signal}; finishing up. Press Ctrl-C again to quit immediately.\n`,

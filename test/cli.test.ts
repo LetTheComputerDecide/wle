@@ -1,5 +1,8 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { startServer, type TestServer } from "./helpers/server.ts";
@@ -14,6 +17,10 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
+async function tempDir() {
+	return mkdtemp(join(tmpdir(), "wle-cli-"));
+}
+
 function spawnCli(args: string[]) {
 	const child = spawn(process.execPath, [CLI, ...args], { stdio: "pipe" });
 	let stdout = "";
@@ -24,8 +31,10 @@ function spawnCli(args: string[]) {
 	child.stderr.on("data", (chunk) => {
 		stderr += chunk;
 	});
-	const exited = once(child, "exit").then(([code]) => code as number);
-	return { child, exited, output: () => ({ stdout, stderr }) };
+	const exit = once(child, "exit");
+	const exited = exit.then(([code]) => code as number);
+	const signalled = exit.then(([, signal]) => signal as NodeJS.Signals | null);
+	return { child, exited, signalled, output: () => ({ stdout, stderr }) };
 }
 
 /** Polls captured output; iterating the stream itself would destroy it on exit. */
@@ -59,12 +68,19 @@ test("SIGINT finishes gracefully: records flushed, summary logged, exit 130", as
 });
 
 test("a second SIGINT quits immediately", async () => {
-	const { child, exited, output } = spawnCli(["-"]);
-	// Waiting on stdin that never ends. Hold the run open with a fetch that hangs.
-	child.stdin.write(`${server.url("/hang")}\n`);
+	// Opening a named pipe for writing blocks until something reads it, and the abort
+	// signal cannot interrupt that, so only the second SIGINT can end this run.
+	const fifo = join(await tempDir(), "out.fifo");
+	execFileSync("mkfifo", [fifo]);
+	const { child, signalled, output } = spawnCli([
+		"--out",
+		fifo,
+		server.url("/html"),
+	]);
 	await new Promise((resolve) => setTimeout(resolve, 300));
 	child.kill("SIGINT");
 	await waitFor(() => output().stderr, "Received SIGINT");
 	child.kill("SIGINT");
-	expect(await exited).toBe(130);
+	// Ended by the signal itself, which shells report as exit status 130.
+	expect(await signalled).toBe("SIGINT");
 });
