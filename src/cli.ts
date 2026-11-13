@@ -25,7 +25,6 @@ process.on("SIGTERM", onSignal);
 
 // Set exitCode rather than calling process.exit(), so buffered stdout is fully flushed.
 process.exitCode = await main(process.argv.slice(2), {
-	stdin: process.stdin,
 	stdout: process.stdout,
 	stderr: process.stderr,
 	signal: controller.signal,

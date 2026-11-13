@@ -5,7 +5,10 @@
 A concurrent producer/consumer link extractor. The producer fetches the markup of a list of URLs and puts it on a bounded queue. Consumers parse each page as it arrives and output the hyperlinks found on it.
 
 ```console
-$ wle --format text https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem https://example.invalid/
+$ cat urls.txt
+https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem
+https://example.invalid/
+$ wle --format text --file urls.txt
 ✓ https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem (164 links, 162 ms)
     https://en.wikipedia.org/wiki/Main_Page
     https://en.wikipedia.org/wiki/Wikipedia:Contents
@@ -33,24 +36,23 @@ Requires Node 26 and pnpm. Node 26 runs TypeScript directly, so there is no buil
 
 ```sh
 pnpm install
-pnpm start https://example.com/ https://en.wikipedia.org/   # URLs as arguments
-pnpm start -- --file urls.txt                               # one URL per line; blank lines and # comments skipped
-cat urls.txt | pnpm start -- -                              # "-" reads stdin
-pnpm start -- --help                                        # every option
+pnpm start --file urls.txt    # one URL per line; blank lines and # comments skipped
+node src/cli.ts --help        # every option (pnpm keeps --help for itself)
 ```
+
+Each run reads its URLs from one file. Lines are trimmed, blank lines and `#` comments are skipped, and the file is read lazily, so a list of millions of URLs is never held in memory.
 
 With Docker:
 
 ```sh
 docker build -t wle .
-docker run --rm wle https://example.com/
-docker run --rm -i wle - < urls.txt
+docker run --rm -v "$PWD:/data:ro" wle --file /data/urls.txt
 ```
 
 Development:
 
 ```sh
-pnpm test        # 200 tests, about 1 s, no network access
+pnpm test        # 201 tests, about 1 s, no network access
 pnpm coverage    # with a coverage report
 pnpm lint        # Biome
 pnpm typecheck   # tsc --strict
@@ -111,7 +113,7 @@ Every setting can be given as a flag or in a JSON file passed with `--config`. F
 
 ```mermaid
 flowchart LR
-    IN["Inputs<br/>args · stdin · files<br/>(read lazily)"] --> P
+    IN["Input file<br/>(read lazily)"] --> P
 
     subgraph P["Producer"]
         direction TB
@@ -151,13 +153,13 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 
 | Requirement | How |
 |---|---|
-| Producer receives a list of URLs | Positional arguments, `--file` (repeatable) and stdin, all read lazily, so a list of a million URLs is never held in memory |
+| Producer receives a list of URLs | A file given with `--file`, read lazily, so a list of a million URLs is never held in memory |
 | Extracts markup onto a queue | `StaticFetcher` → `BoundedQueue<FetchedItem>` |
 | Consumer reads until the queue is empty **and** the producer is done | The producer `close()`s the queue when it finishes. Consumers iterate with `for await`, which ends only once the queue is closed *and* drained, so there is no "empty but not finished yet" race (tested explicitly) |
 | Parses HTML and outputs the hyperlinks for each URL | `extractLinks`; one record per URL, to stdout or a file |
 | Producer and consumer run concurrently | Both run as concurrent async tasks over the shared queue. A test makes page 2's fetch wait until page 1 has been *parsed and emitted*, which can only finish if they truly overlap |
 | Error isolation | Every failure (invalid URL, fetch, HTTP status, parse) becomes a record for that URL only. Tests inject each kind of failure and check the other URLs are unaffected |
-| Unit tests | 200 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
+| Unit tests | 201 tests: unit, model-based, property-based, local-HTTP integration and real-process tests |
 | **Bonus:** URLs fetched concurrently | Global limit (`--concurrency`) plus a per-host limit to be polite to any one server |
 | **Bonus:** trim oldest entries when the queue balloons | `--overflow drop-oldest`: a full queue evicts its oldest page, which is reported as a `dropped` record rather than lost silently. The peak queue depth is in the summary |
 | **Bonus:** comprehensive tests | About 96% statement coverage; see [Testing](#testing) |
@@ -171,7 +173,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 
 **Backpressure by default, eviction on request.** The brief asks to trim the oldest entries when the queue grows too large. Silently losing data is usually the wrong default, so `block` is the default: a full queue makes the producer wait, which stops new fetches. `drop-oldest` is one flag away. When it evicts a page, that page is still reported as a `dropped` record and counted in the summary, so nothing disappears without a trace.
 
-**Exactly one record per input.** This is the invariant that makes error isolation checkable: you can compare the record count with the input count. It holds for evicted pages, for inputs rejected before fetching, and for URLs cut short by Ctrl-C. That includes the awkward case of an input read from stdin just as the interrupt arrives.
+**Exactly one record per input.** This is the invariant that makes error isolation checkable: you can compare the record count with the input count. It holds for evicted pages, for inputs rejected before fetching, and for URLs cut short by Ctrl-C. That includes the awkward case of an input read just as the interrupt arrives.
 
 **Parsing on the main thread, not in worker threads.** Node runs JavaScript on one thread, so parsing (CPU-bound) and fetching (I/O-bound) share it. For normal pages the network dominates. A parse takes a millisecond or two, while a fetch takes tens to hundreds of milliseconds. Consumers yield to the event loop after every page, so a backlog never stalls fetching. If profiling showed parsing was the bottleneck, I would move consumers onto `worker_threads` behind the same queue. I didn't add that complexity speculatively.
 
@@ -199,7 +201,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 
 ## Testing
 
-`pnpm test` runs 200 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
+`pnpm test` runs 201 tests in about a second, with no access to the internet. Statement coverage is about 96%. `cli.ts` shows as 0% because it is tested by spawning a real process, which coverage doesn't track. No coverage threshold is enforced.
 
 | Kind | What | Where |
 |---|---|---|
@@ -209,7 +211,7 @@ The fetcher, sink, clock, link extractor and retry sleep are all passed into the
 | Property-based (fast-check) | For generated documents, every link is absolute, fragment-free and unique; extraction is idempotent; arbitrary input never throws | [`extract.test.ts`](test/extract.test.ts) |
 | Integration | Static fetcher against a local HTTP server with slow, hanging, 4xx/5xx, redirecting, looping, binary, oversized and wrongly-encoded routes | [`fetcher.static.test.ts`](test/fetcher.static.test.ts) |
 | Concurrency and isolation | Producer/consumer overlap; global and per-host limits; lazy input; 300 URLs with failures and every record accounted for; drop-oldest; cancellation; a failing sink with a full queue doesn't hang | [`pipeline.test.ts`](test/pipeline.test.ts) |
-| CLI | Exit codes, config precedence, stdin and files, output errors, closed pipe, interrupts | [`main.test.ts`](test/main.test.ts) |
+| CLI | Exit codes, config precedence, the input file, usage errors, output errors, closed pipe, interrupts | [`main.test.ts`](test/main.test.ts) |
 | Real process | Graceful SIGINT flushes records and exits 130; a second SIGINT quits immediately | [`cli.test.ts`](test/cli.test.ts) |
 
 **Testing the tests.** I checked that the generated tests catch real bugs by planting them by hand. Disabling the handover of a waiting put, or an off-by-one in capacity, makes the model-based queue test fail with a 2–3 step counterexample. Removing fragment stripping or de-duplication makes the link property tests fail. Removing the whitespace trim does *not* break the property tests, because `URL` trims whitespace itself. It is caught by the example tests instead (`"   "` and `" #x"`). That's why both kinds of test are there: properties check rules that must always hold, and examples pin down the specific edge cases.
@@ -219,10 +221,8 @@ The test suite was run repeatedly to check for flakiness. Timing-dependent tests
 ## What I'd do next
 
 - An opt-in Playwright fetcher for SPAs, as described above.
-- A per-host ready-queue scheduler, to remove head-of-line blocking across hosts.
 - `robots.txt` and per-host rate limiting (requests per second, not just concurrency), if this grew into a crawler.
 - Moving parsing to `worker_threads`, if profiling ever showed parsing was the bottleneck.
 - Metrics such as a Prometheus endpoint or OpenTelemetry spans, for long-running use.
-- An option to write records in input order, using a bounded reordering buffer.
 
 See [`PLAN.md`](PLAN.md) for the design as agreed before coding, and [`AI_NOTES.md`](AI_NOTES.md) for how AI was used.

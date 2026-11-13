@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough, Readable, Writable } from "node:stream";
+import { Writable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { EXIT, main } from "../src/main.ts";
 import type { PageRecord } from "../src/records.ts";
@@ -24,11 +24,11 @@ class Capture extends Writable {
 
 async function run(
 	argv: string[],
-	{ stdin = Readable.from([]), signal = new AbortController().signal } = {},
+	{ signal = new AbortController().signal } = {},
 ) {
 	const stdout = new Capture();
 	const stderr = new Capture();
-	const code = await main(argv, { stdin, stdout, stderr, signal });
+	const code = await main(argv, { stdout, stderr, signal });
 	return { code, stdout: stdout.text, stderr: stderr.text };
 }
 
@@ -46,12 +46,18 @@ async function tempDir() {
 	return mkdtemp(join(tmpdir(), "wle-main-"));
 }
 
+/** Writes the URLs to a new file and returns `--file <path>` arguments for it. */
+async function urlFile(...urls: string[]): Promise<string[]> {
+	const path = join(await tempDir(), "urls.txt");
+	await writeFile(path, `${urls.join("\n")}\n`);
+	return ["--file", path];
+}
+
 describe("main", () => {
 	test("prints JSONL records to stdout and logs to stderr", async () => {
-		const { code, stdout, stderr } = await run([
-			server.url("/html"),
-			server.url("/a"),
-		]);
+		const { code, stdout, stderr } = await run(
+			await urlFile(server.url("/html"), server.url("/a")),
+		);
 		expect(code).toBe(EXIT.ok);
 		const records = parseRecords(stdout);
 		expect(records.map((r) => r.status)).toEqual(["ok", "ok"]);
@@ -65,9 +71,11 @@ describe("main", () => {
 	test("exits 2 when some URLs fail, still reporting the rest", async () => {
 		const { code, stdout, stderr } = await run([
 			...fast,
-			server.url("/html"),
-			server.url("/status?code=500"),
-			"not-a-url",
+			...(await urlFile(
+				server.url("/html"),
+				server.url("/status?code=500"),
+				"not-a-url",
+			)),
 		]);
 		expect(code).toBe(EXIT.failures);
 		expect(parseRecords(stdout).map((r) => r.status)).toEqual([
@@ -87,27 +95,13 @@ describe("main", () => {
 			"-o",
 			out,
 			"-q",
-			server.url("/html"),
+			...(await urlFile(server.url("/html"))),
 		]);
 		expect(code).toBe(EXIT.ok);
 		expect(stdout).toBe("");
 		expect(await readFile(out, "utf8")).toContain(
 			`✓ ${server.url("/html")} (2 links,`,
 		);
-	});
-
-	test("reads URLs from stdin and from files", async () => {
-		const dir = await tempDir();
-		const list = join(dir, "urls.txt");
-		await writeFile(list, `# pages\n${server.url("/a")}\n`);
-		const { code, stdout } = await run(["-", "--file", list], {
-			stdin: Readable.from([`${server.url("/html")}\n`]),
-		});
-		expect(code).toBe(EXIT.ok);
-		expect(parseRecords(stdout).map((r) => r.url)).toEqual([
-			server.url("/html"),
-			server.url("/a"),
-		]);
 	});
 
 	test("applies a config file, with flags taking precedence", async () => {
@@ -122,27 +116,31 @@ describe("main", () => {
 			config,
 			"--log-level",
 			"warn",
-			server.url("/html"),
+			...(await urlFile(server.url("/html"))),
 		]);
 		expect(stdout).toMatch(/^✓ /);
 		expect(stderr).toBe("");
 	});
 
 	test("--verbose logs every fetch", async () => {
-		const { stderr } = await run(["-v", server.url("/html")]);
+		const { stderr } = await run([
+			"-v",
+			...(await urlFile(server.url("/html"))),
+		]);
 		expect(stderr).toContain("level=debug msg=Starting");
 		expect(stderr).toMatch(/level=debug msg=Fetched url=\S+ links=2/);
 	});
 
 	test("exits 130 after an interrupt, with a record for every input read", async () => {
 		const controller = new AbortController();
-		const stdin = new PassThrough();
-		stdin.write(`${server.url("/hang")}\n`);
-		// stdin stays open, as if the user were still typing.
-		const running = run(["--timeout-ms", "60000", server.url("/html"), "-"], {
-			stdin,
-			signal: controller.signal,
-		});
+		const running = run(
+			[
+				"--timeout-ms",
+				"60000",
+				...(await urlFile(server.url("/html"), server.url("/hang"))),
+			],
+			{ signal: controller.signal },
+		);
 		setTimeout(() => controller.abort(), 100);
 		const { code, stdout } = await running;
 		expect(code).toBe(EXIT.interrupted);
@@ -164,12 +162,14 @@ describe("main", () => {
 		});
 		stdout.on("error", () => {});
 		const stderr = new Capture();
-		const code = await main([server.url("/html"), server.url("/a")], {
-			stdin: Readable.from([]),
-			stdout,
-			stderr,
-			signal: new AbortController().signal,
-		});
+		const code = await main(
+			await urlFile(server.url("/html"), server.url("/a")),
+			{
+				stdout,
+				stderr,
+				signal: new AbortController().signal,
+			},
+		);
 		expect(code).toBe(EXIT.ok);
 		expect(stderr.text).not.toContain("level=error");
 	});
@@ -182,9 +182,15 @@ describe("main", () => {
 		});
 		const stderr = new Capture();
 		const code = await main(
-			[...fast, server.url("/html"), server.url("/a"), server.url("/b")],
+			[
+				...fast,
+				...(await urlFile(
+					server.url("/html"),
+					server.url("/a"),
+					server.url("/b"),
+				)),
+			],
 			{
-				stdin: Readable.from([]),
 				stdout,
 				stderr,
 				signal: new AbortController().signal,
@@ -195,22 +201,29 @@ describe("main", () => {
 	});
 
 	describe("usage errors exit 1 before fetching anything", () => {
+		// Replaced by a real file of URLs, for cases that must get past the input check.
+		const URLS = "<urls>";
 		test.each([
-			[[], "No URLs given"],
-			[["--bogus", "https://x/"], "Unknown option '--bogus'"],
-			[["--concurrency", "abc", "https://x/"], "concurrency"],
-			[["-v", "-q", "https://x/"], "cannot be combined"],
+			[[], "No input file given"],
+			[["-f", URLS, "-f", URLS], "Only one --file can be given"],
+			[["https://x/"], "does not take positional arguments"],
+			[["--bogus", "-f", URLS], "Unknown option '--bogus'"],
+			[["--concurrency", "abc", "-f", URLS], "concurrency"],
+			[["-v", "-q", "-f", URLS], "cannot be combined"],
 			[["--file", "/no/such/list.txt"], "Cannot read input file"],
 			[
-				["--config", "/no/such/wle.json", "https://x/"],
+				["--config", "/no/such/wle.json", "-f", URLS],
 				"Cannot read config file",
 			],
 			[
-				["--out", "/no/such/dir/out.jsonl", "https://x/"],
+				["--out", "/no/such/dir/out.jsonl", "-f", URLS],
 				"Cannot open output file",
 			],
 		])("%j", async (argv, message) => {
-			const { code, stdout, stderr } = await run(argv);
+			const [, urls] = await urlFile("https://x/");
+			const { code, stdout, stderr } = await run(
+				argv.map((arg) => (arg === URLS ? (urls as string) : arg)),
+			);
 			expect(code).toBe(EXIT.fatal);
 			expect(stdout).toBe("");
 			expect(stderr).toContain(message);

@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +19,13 @@ afterAll(() => server.close());
 
 async function tempDir() {
 	return mkdtemp(join(tmpdir(), "wle-cli-"));
+}
+
+/** Writes the URLs to a new file and returns `--file <path>` arguments for it. */
+async function urlFile(...urls: string[]): Promise<string[]> {
+	const path = join(await tempDir(), "urls.txt");
+	await writeFile(path, `${urls.join("\n")}\n`);
+	return ["--file", path];
 }
 
 function spawnCli(args: string[]) {
@@ -45,7 +52,9 @@ async function waitFor(read: () => string, text: string) {
 }
 
 test("exits 0 and prints every record", async () => {
-	const { exited, output } = spawnCli([server.url("/html"), server.url("/a")]);
+	const { exited, output } = spawnCli(
+		await urlFile(server.url("/html"), server.url("/a")),
+	);
 	expect(await exited).toBe(0);
 	expect(output().stdout.trim().split("\n")).toHaveLength(2);
 });
@@ -54,8 +63,7 @@ test("SIGINT finishes gracefully: records flushed, summary logged, exit 130", as
 	const { child, exited, output } = spawnCli([
 		"--timeout-ms",
 		"60000",
-		server.url("/html"),
-		server.url("/hang"),
+		...(await urlFile(server.url("/html"), server.url("/hang"))),
 	]);
 	await waitFor(() => output().stdout, `"status":"ok"`);
 	child.kill("SIGINT");
@@ -75,7 +83,7 @@ test("a second SIGINT quits immediately", async () => {
 	const { child, signalled, output } = spawnCli([
 		"--out",
 		fifo,
-		server.url("/html"),
+		...(await urlFile(server.url("/html"))),
 	]);
 	await new Promise((resolve) => setTimeout(resolve, 300));
 	child.kill("SIGINT");

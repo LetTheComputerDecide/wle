@@ -1,5 +1,5 @@
 import { open } from "node:fs/promises";
-import type { Readable, Writable } from "node:stream";
+import type { Writable } from "node:stream";
 import { parseArgs } from "node:util";
 import {
 	type Config,
@@ -9,7 +9,7 @@ import {
 	toPipelineOptions,
 } from "./config.ts";
 import { StaticFetcher } from "./fetcher/static.ts";
-import { checkInputFiles, readInputs } from "./inputs.ts";
+import { checkInputFile, readUrlsFromFile } from "./inputs.ts";
 import { createLogger, type Logger } from "./logger.ts";
 import { formatRecord } from "./output.ts";
 import { runPipeline } from "./pipeline.ts";
@@ -18,7 +18,6 @@ import type { Summary } from "./summary.ts";
 import { VERSION } from "./version.ts";
 
 export interface MainIO {
-	stdin: Readable;
 	stdout: Writable;
 	stderr: Writable;
 	/** Aborted on SIGINT/SIGTERM: finish gracefully. */
@@ -46,13 +45,13 @@ const SETTING_FLAGS = {
 	"log-level": "logLevel",
 } as const;
 
-const USAGE = `Usage: wle [options] [url | -]...
+const USAGE = `Usage: wle [options] --file <path>
 
 Fetches each URL concurrently and prints the hyperlinks found on each page.
-URLs come from arguments, from stdin where "-" is given, and from --file.
+URLs are read from a file, one per line; blank lines and # comments are skipped.
 
 Input:
-  -f, --file <path>              Read URLs from a file, one per line (repeatable)
+  -f, --file <path>              File of URLs (required)
   -c, --config <path>            JSON config file; flags override it
 
 Output:
@@ -110,7 +109,7 @@ export async function main(
 		return EXIT.ok;
 	}
 
-	const { config, args, files, output } = setup;
+	const { config, inputFile, output } = setup;
 	const logger = createLogger(io.stderr, config.logLevel);
 	const controller = new AbortController();
 	const signal = AbortSignal.any([io.signal, controller.signal]);
@@ -145,7 +144,7 @@ export async function main(
 	try {
 		logger.debug("Starting", { version: VERSION, ...config });
 		summary = await runPipeline(
-			readInputs({ args, files, stdin: io.stdin, signal }),
+			readUrlsFromFile(inputFile, signal),
 			toPipelineOptions(config),
 			{
 				fetcher: new StaticFetcher({
@@ -185,8 +184,7 @@ export async function main(
 
 interface Setup {
 	config: Config;
-	args: string[];
-	files: string[];
+	inputFile: string;
 	output: Writable;
 }
 
@@ -203,9 +201,9 @@ async function prepare(
 			{ type: "string" as const },
 		]),
 	);
-	const { values, positionals } = parseArgs({
+	const { values } = parseArgs({
 		args: [...argv],
-		allowPositionals: true,
+		allowPositionals: false,
 		options: {
 			...settingOptions,
 			out: { type: "string", short: "o" },
@@ -246,14 +244,16 @@ async function prepare(
 	}
 	const config = await loadConfig(values.config, flags);
 
-	const files = values.file ?? [];
-	if (positionals.length === 0 && files.length === 0) {
-		throw new ConfigError(
-			'No URLs given. Pass URLs as arguments, "-" for stdin, or --file',
-		);
+	// Parsed as a list so a repeated --file is reported, not silently replaced by the last.
+	const [inputFile, ...extraFiles] = values.file ?? [];
+	if (inputFile === undefined) {
+		throw new ConfigError("No input file given. Pass one with --file");
+	}
+	if (extraFiles.length > 0) {
+		throw new ConfigError("Only one --file can be given");
 	}
 	try {
-		await checkInputFiles(files);
+		await checkInputFile(inputFile);
 	} catch (error) {
 		throw new ConfigError(
 			`Cannot read input file: ${(error as Error).message}`,
@@ -270,7 +270,7 @@ async function prepare(
 			);
 		}
 	}
-	return { config, args: positionals, files, output };
+	return { config, inputFile, output };
 }
 
 /** Failures log at `warn` so they show by default; successes only with `--verbose`. */

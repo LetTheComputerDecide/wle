@@ -1,9 +1,8 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough, Readable } from "node:stream";
 import { describe, expect, test } from "vitest";
-import { checkInputFiles, readInputs } from "../src/inputs.ts";
+import { checkInputFile, readUrlsFromFile } from "../src/inputs.ts";
 
 async function file(contents: string): Promise<string> {
 	const dir = await mkdtemp(join(tmpdir(), "wle-inputs-"));
@@ -22,22 +21,13 @@ async function collect(iterable: AsyncIterable<string>): Promise<string[]> {
 
 const signal = () => new AbortController().signal;
 
-describe("readInputs", () => {
-	test("reads arguments, stdin in place of '-', then files", async () => {
-		const path = await file("https://f/1\nhttps://f/2\n");
-		const inputs = readInputs({
-			args: ["https://a/1", "-", "https://a/2"],
-			files: [path],
-			stdin: Readable.from(["https://s/1\nhttps://s/2"]),
-			signal: signal(),
-		});
-		expect(await collect(inputs)).toEqual([
+describe("readUrlsFromFile", () => {
+	test("reads one URL per line, in order", async () => {
+		const path = await file("https://a/1\nhttps://a/2\nhttps://a/3\n");
+		expect(await collect(readUrlsFromFile(path, signal()))).toEqual([
 			"https://a/1",
-			"https://s/1",
-			"https://s/2",
 			"https://a/2",
-			"https://f/1",
-			"https://f/2",
+			"https://a/3",
 		]);
 	});
 
@@ -45,58 +35,47 @@ describe("readInputs", () => {
 		const path = await file(
 			"# list\r\n\r\n  https://x/1  \r\n\t# indented comment\nhttps://x/2",
 		);
-		const inputs = readInputs({
-			args: [],
-			files: [path],
-			stdin: Readable.from([]),
-			signal: signal(),
-		});
-		expect(await collect(inputs)).toEqual(["https://x/1", "https://x/2"]);
+		expect(await collect(readUrlsFromFile(path, signal()))).toEqual([
+			"https://x/1",
+			"https://x/2",
+		]);
 	});
 
-	test("stops waiting on stdin when aborted", async () => {
+	// Lines readline has already buffered are still yielded, but no new data is read. The
+	// producer checks the signal for each input itself, so those extra lines are never fetched.
+	test("stops reading new data when aborted", async () => {
+		const total = 100_000; // about 2 MB: far more than one read chunk
+		const path = await file(
+			Array.from({ length: total }, (_, line) => `https://x/${line}`).join(
+				"\n",
+			),
+		);
 		const controller = new AbortController();
-		const stdin = new PassThrough();
-		stdin.write("https://s/1\n");
-		const inputs = readInputs({
-			args: ["-"],
-			files: [],
-			stdin,
-			signal: controller.signal,
-		});
-		const received: string[] = [];
-		const done = (async () => {
-			for await (const input of inputs) {
-				received.push(input);
-				controller.abort();
-			}
-		})();
-		// stdin is never ended; only the abort can finish the loop.
-		await done;
-		expect(received).toEqual(["https://s/1"]);
+		let received = 0;
+		for await (const _url of readUrlsFromFile(path, controller.signal)) {
+			received++;
+			controller.abort();
+		}
+		expect(received).toBeGreaterThan(0);
+		expect(received).toBeLessThan(total);
 	});
 
 	test("reads nothing when already aborted", async () => {
 		const controller = new AbortController();
 		controller.abort();
-		const inputs = readInputs({
-			args: ["-"],
-			files: [],
-			stdin: Readable.from(["https://s/1\n"]),
-			signal: controller.signal,
-		});
-		expect(await collect(inputs)).toEqual([]);
+		const path = await file("https://x/1\n");
+		expect(await collect(readUrlsFromFile(path, controller.signal))).toEqual(
+			[],
+		);
 	});
 });
 
-describe("checkInputFiles", () => {
-	test("accepts readable files", async () => {
-		await expect(checkInputFiles([await file("")])).resolves.toBeUndefined();
+describe("checkInputFile", () => {
+	test("accepts an existing file", async () => {
+		await expect(checkInputFile(await file(""))).resolves.toBeUndefined();
 	});
 
 	test("rejects a missing file", async () => {
-		await expect(checkInputFiles(["/no/such/file.txt"])).rejects.toThrow(
-			/ENOENT/,
-		);
+		await expect(checkInputFile("/no/such/file.txt")).rejects.toThrow(/ENOENT/);
 	});
 });

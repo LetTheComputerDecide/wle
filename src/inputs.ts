@@ -1,55 +1,31 @@
 import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import type { Readable } from "node:stream";
 
-export interface InputSources {
-	/** URLs from the command line; `-` stands for stdin. */
-	args: readonly string[];
-	/** Files with one URL per line. */
-	files: readonly string[];
-	stdin: Readable;
-	/** Stops reading, even while waiting on stdin. */
-	signal: AbortSignal;
-}
-
-/** Fails fast on unreadable input files, before any fetching starts. */
-export async function checkInputFiles(files: readonly string[]): Promise<void> {
-	// Best effort: a file can still disappear before it is read, which is then fatal.
-	for (const file of files) {
-		await access(file);
-	}
+/** Fails fast on a missing input file, before any fetching starts. */
+export async function checkInputFile(path: string): Promise<void> {
+	// Best effort: the file can still disappear before it is read, which is then fatal.
+	await access(path);
 }
 
 /**
- * Yields input URLs lazily: command-line arguments (reading stdin where `-` appears),
- * then each file in turn. Blank lines and lines starting with `#` are skipped.
+ * Yields the URLs in a file lazily, one per line. Lines are trimmed; blank lines and
+ * lines starting with `#` are skipped.
+ *
+ * @param signal - Stops reading, even while waiting on a file that blocks, such as a
+ * named pipe.
  */
-export async function* readInputs(
-	sources: InputSources,
-): AsyncGenerator<string> {
-	for (const arg of sources.args) {
-		if (arg === "-") {
-			yield* readLines(sources.stdin, sources.signal);
-		} else {
-			yield arg;
-		}
-	}
-	for (const file of sources.files) {
-		yield* readLines(createReadStream(file), sources.signal);
-	}
-}
-
-async function* readLines(
-	input: Readable,
+export async function* readUrlsFromFile(
+	path: string,
 	signal: AbortSignal,
 ): AsyncGenerator<string> {
 	// Needed: readline ignores a signal that has already aborted and reads the whole input.
 	if (signal.aborted) {
 		return;
 	}
+	const file = createReadStream(path);
 	const lines = createInterface({
-		input,
+		input: file,
 		// Treat "\r\n" as one line break even when the two bytes arrive in separate chunks.
 		crlfDelay: Number.POSITIVE_INFINITY,
 		signal,
@@ -67,7 +43,9 @@ async function* readLines(
 			throw error;
 		}
 	} finally {
-		// Also runs when the caller stops iterating early.
+		// Also runs when the caller stops iterating early. Closing readline leaves the file
+		// open, so close that too.
 		lines.close();
+		file.destroy();
 	}
 }
